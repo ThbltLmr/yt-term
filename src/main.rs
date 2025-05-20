@@ -6,6 +6,7 @@ use std::{
 use clap::Parser;
 use video_buffer::{VideoBuffer, VideoFrame};
 
+mod base64_encoder;
 mod result;
 mod video_buffer;
 
@@ -84,8 +85,8 @@ fn main() {
                     // Push to the buffer
                     buffer.push_frame(frame);
 
-                    // Update timestamp (assuming ~30fps, we increment by ~33ms)
-                    timestamp += 33;
+                    // Update timestamp (assuming ~25, we increment by ~40)
+                    timestamp += 40;
 
                     println!(
                         "Frame buffered: {} (Buffer size: {})",
