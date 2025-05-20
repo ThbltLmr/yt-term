@@ -2,23 +2,29 @@ use std::collections::VecDeque;
 
 const MAX_BUFFER_SIZE: usize = 100;
 
-struct VideoFrame {
+pub struct VideoFrame {
     data: Vec<u8>,
     timestamp: u64,
 }
 
-struct VideoBuffer {
+impl VideoFrame {
+    pub fn new(data: Vec<u8>, timestamp: u64) -> Self {
+        VideoFrame { data, timestamp }
+    }
+}
+
+pub struct VideoBuffer {
     frames: VecDeque<VideoFrame>,
 }
 
 impl VideoBuffer {
-    fn new() -> Self {
+    pub fn new() -> Self {
         VideoBuffer {
             frames: VecDeque::with_capacity(MAX_BUFFER_SIZE),
         }
     }
 
-    fn push_frame(&mut self, frame: VideoFrame) {
+    pub fn push_frame(&mut self, frame: VideoFrame) {
         if self.frames.len() >= MAX_BUFFER_SIZE {
             // If buffer is full, remove the oldest frame
             self.frames.pop_front();
@@ -26,11 +32,11 @@ impl VideoBuffer {
         self.frames.push_back(frame);
     }
 
-    fn get_frame(&mut self) -> Option<VideoFrame> {
+    pub fn get_frame(&mut self) -> Option<VideoFrame> {
         self.frames.pop_front()
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.frames.len()
     }
 }
