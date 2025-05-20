@@ -6,7 +6,7 @@ use std::{
 use clap::Parser;
 use video_buffer::{VideoBuffer, VideoFrame};
 
-mod base64_encoder;
+mod kitty_encoder;
 mod result;
 mod video_buffer;
 

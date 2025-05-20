@@ -3,8 +3,8 @@ use std::collections::VecDeque;
 const MAX_BUFFER_SIZE: usize = 100;
 
 pub struct VideoFrame {
-    data: Vec<u8>,
-    timestamp: u64,
+    pub data: Vec<u8>,
+    pub timestamp: u64,
 }
 
 impl VideoFrame {
