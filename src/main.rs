@@ -6,8 +6,10 @@ use std::{
 use clap::Parser;
 use video_buffer::{VideoBuffer, VideoFrame};
 
+mod display_manager;
 mod kitty_encoder;
 mod result;
+mod ring_buffer;
 mod video_buffer;
 
 #[derive(Parser, Debug)]

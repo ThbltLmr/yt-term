@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-const MAX_BUFFER_SIZE: usize = 100;
+use crate::ring_buffer::{RingBuffer, MAX_BUFFER_SIZE};
 
 pub struct VideoFrame {
     pub data: Vec<u8>,
@@ -17,14 +17,14 @@ pub struct VideoBuffer {
     frames: VecDeque<VideoFrame>,
 }
 
-impl VideoBuffer {
-    pub fn new() -> Self {
+impl RingBuffer<VideoFrame> for VideoBuffer {
+    fn new() -> Self {
         VideoBuffer {
             frames: VecDeque::with_capacity(MAX_BUFFER_SIZE),
         }
     }
 
-    pub fn push_frame(&mut self, frame: VideoFrame) {
+    fn push_frame(&mut self, frame: VideoFrame) {
         if self.frames.len() >= MAX_BUFFER_SIZE {
             // If buffer is full, remove the oldest frame
             self.frames.pop_front();
@@ -32,11 +32,11 @@ impl VideoBuffer {
         self.frames.push_back(frame);
     }
 
-    pub fn get_frame(&mut self) -> Option<VideoFrame> {
+    fn get_frame(&mut self) -> Option<VideoFrame> {
         self.frames.pop_front()
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.frames.len()
     }
 }

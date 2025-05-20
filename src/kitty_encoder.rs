@@ -1,5 +1,9 @@
+use crate::ring_buffer::{RingBuffer, MAX_BUFFER_SIZE};
 use base64::{engine::general_purpose, Engine as _};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 use crate::video_buffer::{VideoBuffer, VideoFrame};
 
@@ -18,21 +22,55 @@ impl KittyFrame {
     }
 }
 
+pub struct KittyBuffer {
+    frames: VecDeque<KittyFrame>,
+}
+
+impl RingBuffer<KittyFrame> for KittyBuffer {
+    fn new() -> Self {
+        KittyBuffer {
+            frames: VecDeque::with_capacity(MAX_BUFFER_SIZE),
+        }
+    }
+
+    fn push_frame(&mut self, frame: KittyFrame) {
+        if self.frames.len() >= MAX_BUFFER_SIZE {
+            // If buffer is full, remove the oldest frame
+            self.frames.pop_front();
+        }
+        self.frames.push_back(frame);
+    }
+
+    fn get_frame(&mut self) -> Option<KittyFrame> {
+        self.frames.pop_front()
+    }
+
+    fn len(&self) -> usize {
+        self.frames.len()
+    }
+}
+
 pub struct KittyEncoder {
-    buffer: Arc<Mutex<VideoBuffer>>,
+    video_buffer: Arc<Mutex<VideoBuffer>>,
+    kitty_buffer: Arc<Mutex<KittyBuffer>>,
     width: usize,
     height: usize,
 }
 
 impl KittyEncoder {
-    pub fn new(buffer: Arc<Mutex<VideoBuffer>>, width: usize, height: usize) -> Self {
+    pub fn new(
+        video_buffer: Arc<Mutex<VideoBuffer>>,
+        kitty_buffer: Arc<Mutex<KittyBuffer>>,
+        width: usize,
+        height: usize,
+    ) -> Self {
         KittyEncoder {
-            buffer,
+            video_buffer,
+            kitty_buffer,
             width,
             height,
         }
     }
-
     // Convert a frame to Kitty graphics protocol
     fn encode_frame_kitty(&self, frame: VideoFrame) -> KittyFrame {
         // Base64 encode the frame data
