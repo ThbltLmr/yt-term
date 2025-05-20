@@ -1,43 +1,9 @@
-use std::{collections::VecDeque, process::Command};
+use std::process::{Command, Stdio};
 
 use clap::Parser;
 
 mod result;
-
-const MAX_BUFFER_SIZE: usize = 100;
-
-struct VideoFrame {
-    data: Vec<u8>,
-    timestamp: u64,
-}
-
-struct VideoBuffer {
-    frames: VecDeque<VideoFrame>,
-}
-
-impl VideoBuffer {
-    fn new() -> Self {
-        VideoBuffer {
-            frames: VecDeque::with_capacity(MAX_BUFFER_SIZE),
-        }
-    }
-
-    fn push_frame(&mut self, frame: VideoFrame) {
-        if self.frames.len() >= MAX_BUFFER_SIZE {
-            // If buffer is full, remove the oldest frame
-            self.frames.pop_front();
-        }
-        self.frames.push_back(frame);
-    }
-
-    fn get_frame(&mut self) -> Option<VideoFrame> {
-        self.frames.pop_front()
-    }
-
-    fn len(&self) -> usize {
-        self.frames.len()
-    }
-}
+mod video_buffer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -63,7 +29,8 @@ fn main() {
             &url,
         ])
         .stdout(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .expect("Could not start child process");
 
     // Connect yt-dlp's stdout to ffmpeg's stdin
     let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
@@ -77,5 +44,6 @@ fn main() {
         ])
         .stdin(Stdio::from(yt_dlp_stdout)) // Connect the pipes
         .stdout(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .expect("Could not start child process");
 }
