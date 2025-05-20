@@ -4,6 +4,8 @@ use std::{
 };
 
 use clap::Parser;
+use kitty_encoder::KittyBuffer;
+use ring_buffer::RingBuffer;
 use video_buffer::{VideoBuffer, VideoFrame};
 
 mod display_manager;
@@ -27,7 +29,8 @@ fn main() {
 
     let frame_size = width * height * 3;
 
-    let mut buffer = VideoBuffer::new();
+    let mut video_buffer = VideoBuffer::new();
+    let mut kitty_buffer = KittyBuffer::new();
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
