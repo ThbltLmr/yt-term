@@ -83,7 +83,7 @@ impl KittyEncoder {
         // v=<height>: Height of image
         // t=d: Direct (not using placement id)
         let kitty_data: String = format!(
-            "{};a=T;f=24;s={};v={};t=d,{}{}",
+            "{};a=T;f=24;s={};v={};t=d;{}{}",
             KITTY_GRAPHICS_START, self.width, self.height, encoded_data, KITTY_GRAPHICS_END
         );
 

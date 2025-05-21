@@ -20,7 +20,7 @@ impl DisplayManager {
         // Write the frame data and check for errors
         write!(stdout, "{}", frame.data).expect("Failed to write frame data");
         // Write the log message using the same stdout handle
-        write!(stdout, "Displaying frame: {}\n", frame.timestamp).expect("Failed to write log");
+        write!(stdout, "Displaying frame: {}\n", frame.data).expect("Failed to write log");
         // Flush once at the end
         stdout.flush().expect("Failed to flush stdout");
     }
