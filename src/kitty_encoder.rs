@@ -7,10 +7,6 @@ use std::{
 
 use crate::video_buffer::{VideoBuffer, VideoFrame};
 
-// Kitty graphics protocol constants
-const KITTY_GRAPHICS_START: &str = "\x1B_G";
-const KITTY_GRAPHICS_END: &str = "\x1B\\";
-
 pub struct KittyFrame {
     pub data: String,
     pub timestamp: u64,
@@ -71,6 +67,30 @@ impl KittyEncoder {
             height,
         }
     }
+
+    pub fn encode_test_frame(&self) -> KittyFrame {
+        // Create a test frame with a simple pattern
+        let mut test_frame = Vec::new();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                // Create a simple gradient pattern
+                let r = (255) as u8;
+                let g = (0) as u8;
+                let b = (0) as u8;
+                test_frame.push(r);
+                test_frame.push(g);
+                test_frame.push(b);
+            }
+        }
+
+        // Create a VideoFrame with the test data
+        let frame = VideoFrame::new(test_frame, 0);
+
+        // Encode the test frame to Kitty graphics protocol
+        let kitty_frame = self.encode_frame_kitty(frame);
+        println!("Kitty frame data: {}", kitty_frame.data);
+        kitty_frame
+    }
     // Convert a frame to Kitty graphics protocol
     fn encode_frame_kitty(&self, frame: VideoFrame) -> KittyFrame {
         // Base64 encode the frame data
@@ -83,10 +103,12 @@ impl KittyEncoder {
         // v=<height>: Height of image
         // t=d: Direct (not using placement id)
         let kitty_data: String = format!(
-            "{};a=T;f=24;s={};v={};t=d;{}{}",
-            KITTY_GRAPHICS_START, self.width, self.height, encoded_data, KITTY_GRAPHICS_END
+            "\x1b_Gf=24,t=d,s={},v={};{}\x1b\\",
+            self.width, self.height, encoded_data
         );
 
+        println!("Kitty data length: {}", kitty_data.len());
+        println!("Kitty data: {:?}", kitty_data.as_bytes());
         KittyFrame::new(kitty_data, frame.timestamp)
     }
 

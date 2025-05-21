@@ -29,16 +29,22 @@ fn main() {
     let width = 1280;
     let height = 720;
 
-    let frame_size = width * height * 3;
-
     let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
     let kitty_buffer = Arc::new(Mutex::new(KittyBuffer::new()));
+
+    let display_manager = display_manager::DisplayManager::new(Arc::clone(&kitty_buffer));
+    let frame_size = width * height * 3;
+
     let kitty_encoder = KittyEncoder::new(
         Arc::clone(&video_buffer),
         Arc::clone(&kitty_buffer),
         width,
         height,
     );
+    loop {
+        let test_frame = kitty_encoder.encode_test_frame();
+        display_manager.display_frame(test_frame);
+    }
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
@@ -80,8 +86,6 @@ fn main() {
         // Start the Kitty encoder thread
         kitty_encoder.encode();
     });
-
-    let display_manager = display_manager::DisplayManager::new(Arc::clone(&kitty_buffer));
 
     thread::spawn(move || {
         display_manager.display();

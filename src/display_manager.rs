@@ -15,7 +15,8 @@ impl DisplayManager {
         DisplayManager { kitty_buffer }
     }
 
-    fn display_frame(&self, frame: KittyFrame) {
+    pub fn display_frame(&self, frame: KittyFrame) {
+        println!("Displaying frame: {}", frame.data);
         let mut stdout = io::stdout();
         // Write the frame data and check for errors
         write!(stdout, "{}", frame.data).expect("Failed to write frame data");
