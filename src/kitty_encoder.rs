@@ -12,8 +12,8 @@ const KITTY_GRAPHICS_START: &str = "\x1B_G";
 const KITTY_GRAPHICS_END: &str = "\x1B\\";
 
 pub struct KittyFrame {
-    data: String,
-    timestamp: u64,
+    pub data: String,
+    pub timestamp: u64,
 }
 
 impl KittyFrame {
@@ -88,5 +88,23 @@ impl KittyEncoder {
         );
 
         KittyFrame::new(kitty_data, frame.timestamp)
+    }
+
+    pub fn encode(&self) {
+        loop {
+            // Get the video frame from the video buffer
+            let mut video_buffer = self.video_buffer.lock().unwrap();
+            let frame = video_buffer.get_frame();
+
+            if let Some(frame) = frame {
+                // Encode the frame to Kitty graphics protocol
+                let kitty_frame = self.encode_frame_kitty(frame);
+
+                // Push the encoded frame to the kitty buffer
+                let mut kitty_buffer = self.kitty_buffer.lock().unwrap();
+                kitty_buffer.push_frame(kitty_frame);
+                println!("Kitty buffer length: {}", kitty_buffer.len());
+            }
+        }
     }
 }

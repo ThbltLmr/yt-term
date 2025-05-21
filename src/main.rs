@@ -1,10 +1,12 @@
 use std::{
     io::Read,
     process::{Command, Stdio},
+    sync::{Arc, Mutex},
+    thread,
 };
 
 use clap::Parser;
-use kitty_encoder::KittyBuffer;
+use kitty_encoder::{KittyBuffer, KittyEncoder};
 use ring_buffer::RingBuffer;
 use video_buffer::{VideoBuffer, VideoFrame};
 
@@ -29,8 +31,14 @@ fn main() {
 
     let frame_size = width * height * 3;
 
-    let mut video_buffer = VideoBuffer::new();
-    let mut kitty_buffer = KittyBuffer::new();
+    let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
+    let kitty_buffer = Arc::new(Mutex::new(KittyBuffer::new()));
+    let kitty_encoder = KittyEncoder::new(
+        Arc::clone(&video_buffer),
+        Arc::clone(&kitty_buffer),
+        width,
+        height,
+    );
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
@@ -68,6 +76,17 @@ fn main() {
     // Buffer for reading chunks from stdout
     let mut read_buffer = vec![0u8; 32768]; // 32KB chunks
 
+    thread::spawn(move || {
+        // Start the Kitty encoder thread
+        kitty_encoder.encode();
+    });
+
+    let display_manager = display_manager::DisplayManager::new(Arc::clone(&kitty_buffer));
+
+    thread::spawn(move || {
+        display_manager.display();
+    });
+
     // Read frames from ffmpeg and store them in the video buffer
     loop {
         match ffmpeg_stdout.read(&mut read_buffer) {
@@ -88,7 +107,7 @@ fn main() {
                     let frame = VideoFrame::new(frame_data, timestamp);
 
                     // Push to the buffer
-                    buffer.push_frame(frame);
+                    video_buffer.lock().unwrap().push_frame(frame);
 
                     // Update timestamp (assuming ~25, we increment by ~40)
                     timestamp += 40;
@@ -96,7 +115,7 @@ fn main() {
                     println!(
                         "Frame buffered: {} (Buffer size: {})",
                         timestamp,
-                        buffer.len()
+                        video_buffer.lock().unwrap().len()
                     );
 
                     // You can add a small sleep to simulate processing time
