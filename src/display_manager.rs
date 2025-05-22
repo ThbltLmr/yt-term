@@ -22,14 +22,21 @@ impl DisplayManager {
     }
 
     pub fn display(&self) {
+        while self.kitty_buffer.lock().unwrap().len() < 100 {
+            // Wait for the buffer to fill up
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
         loop {
-            let kitty_frame = self.kitty_buffer.lock().unwrap().get_frame();
-            if let Some(frame) = kitty_frame {
-                self.display_frame(frame);
-                std::thread::sleep(std::time::Duration::from_millis(40));
+            if self.kitty_buffer.lock().unwrap().len() == 0 {
+                // No frames to display, sleep for a bit
+                std::thread::sleep(std::time::Duration::from_secs(3));
             } else {
-                // Sleep for a short duration to avoid busy waiting
-                std::thread::sleep(std::time::Duration::from_millis(40));
+                let kitty_frame = self.kitty_buffer.lock().unwrap().get_frame();
+                if let Some(frame) = kitty_frame {
+                    self.display_frame(frame);
+                    std::thread::sleep(std::time::Duration::from_millis(40));
+                }
             }
         }
     }
