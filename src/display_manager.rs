@@ -27,6 +27,8 @@ impl DisplayManager {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
 
+        let mut current_timestamp = 0;
+
         loop {
             if self.kitty_buffer.lock().unwrap().len() == 0 {
                 // No frames to display, sleep for a bit
@@ -34,7 +36,18 @@ impl DisplayManager {
             } else {
                 let kitty_frame = self.kitty_buffer.lock().unwrap().get_frame();
                 if let Some(frame) = kitty_frame {
-                    self.display_frame(frame);
+                    if frame.timestamp == current_timestamp {
+                        let mut stdout = io::stdout();
+
+                        let reset_cursor = b"\x1B[H";
+                        stdout.write_all(reset_cursor).unwrap();
+                        stdout.flush().expect("Failed to flush stdout");
+
+                        self.display_frame(frame);
+                        current_timestamp += 40;
+                    } else {
+                        panic!("Frame timestamp mismatch");
+                    }
                 }
             }
         }

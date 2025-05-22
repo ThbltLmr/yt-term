@@ -127,7 +127,6 @@ impl KittyEncoder {
                 // Push the encoded frame to the kitty buffer
                 let mut kitty_buffer = self.kitty_buffer.lock().unwrap();
                 kitty_buffer.push_frame(kitty_frame);
-                println!("Kitty buffer length: {}", kitty_buffer.len());
             }
         }
     }

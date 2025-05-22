@@ -55,6 +55,7 @@ fn main() {
             "232",
             &url,
         ])
+        .stderr(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
         .expect("Could not start yt-dlp process");
@@ -68,6 +69,7 @@ fn main() {
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-", // Output to stdout
         ])
         .stdin(Stdio::from(yt_dlp_stdout)) // Connect the pipes
+        .stderr(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
         .expect("Could not start ffmpeg process");
@@ -115,12 +117,6 @@ fn main() {
 
                     // Update timestamp (assuming ~25, we increment by ~40)
                     timestamp += 40;
-
-                    println!(
-                        "Frame buffered: {} (Buffer size: {})",
-                        timestamp,
-                        video_buffer.lock().unwrap().len()
-                    );
                 }
             }
             Err(e) => {
