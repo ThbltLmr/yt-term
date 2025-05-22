@@ -90,8 +90,8 @@ impl KittyEncoder {
         let (control_data, payload) = (
             HashMap::from([
                 ("f".into(), "24".into()),
-                ("s".into(), "32".into()),
-                ("v".into(), "32".into()),
+                ("s".into(), "1280".into()),
+                ("v".into(), "720".into()),
                 ("t".into(), "d".into()),
                 ("a".into(), "T".into()),
             ]),

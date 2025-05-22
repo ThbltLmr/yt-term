@@ -46,18 +46,13 @@ fn main() {
         height,
     );
 
-    loop {
-        let test_frame = kitty_encoder.encode_test_frame();
-        display_manager.display_frame(test_frame);
-    }
-
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
             "-o",
             "-",         // Output to stdout
             "--no-part", // Don't create .part files
             "-f",
-            "247",
+            "232",
             &url,
         ])
         .stdout(Stdio::piped())
@@ -126,10 +121,6 @@ fn main() {
                         timestamp,
                         video_buffer.lock().unwrap().len()
                     );
-
-                    // You can add a small sleep to simulate processing time
-                    // Comment this out for maximum processing speed
-                    // thread::sleep(Duration::from_millis(30));
                 }
             }
             Err(e) => {
