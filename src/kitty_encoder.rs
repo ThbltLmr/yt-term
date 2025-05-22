@@ -9,11 +9,12 @@ use crate::video_buffer::{VideoBuffer, VideoFrame};
 
 pub struct KittyFrame {
     pub data: Vec<u8>,
+    pub timestamp: u64,
 }
 
 impl KittyFrame {
-    pub fn new(data: Vec<u8>) -> Self {
-        KittyFrame { data }
+    pub fn new(data: Vec<u8>, timestamp: u64) -> Self {
+        KittyFrame { data, timestamp }
     }
 }
 
@@ -78,7 +79,10 @@ impl KittyEncoder {
             }
         }
 
-        self.encode_frame_kitty(VideoFrame { data: test_frame })
+        self.encode_frame_kitty(VideoFrame {
+            data: test_frame,
+            timestamp: 0,
+        })
     }
     // Convert a frame to Kitty graphics protocol
     fn encode_frame_kitty(&self, frame: VideoFrame) -> KittyFrame {
@@ -107,7 +111,7 @@ impl KittyEncoder {
         buffer.extend_from_slice(&encoded_payload);
         buffer.extend_from_slice(suffix);
 
-        KittyFrame::new(buffer)
+        KittyFrame::new(buffer, frame.timestamp)
     }
 
     pub fn encode(&self) {
