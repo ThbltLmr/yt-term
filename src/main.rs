@@ -30,8 +30,8 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let url = args.url;
-    let width = 1280;
-    let height = 720;
+    let width = 640;
+    let height = 360;
 
     let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
     let kitty_buffer = Arc::new(Mutex::new(KittyBuffer::new()));
@@ -52,7 +52,7 @@ fn main() {
             "-",         // Output to stdout
             "--no-part", // Don't create .part files
             "-f",
-            "232",
+            format!("bestvideo[height={height}][width={width}]").as_str(),
             &url,
         ])
         .stderr(Stdio::null())
