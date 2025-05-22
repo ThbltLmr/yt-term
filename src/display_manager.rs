@@ -22,11 +22,6 @@ impl DisplayManager {
     }
 
     pub fn display(&self) {
-        while self.kitty_buffer.lock().unwrap().len() < 100 {
-            // Wait for the buffer to fill up
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-
         let mut current_timestamp = 0;
 
         loop {
