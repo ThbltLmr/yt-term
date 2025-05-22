@@ -16,13 +16,8 @@ impl DisplayManager {
     }
 
     pub fn display_frame(&self, frame: KittyFrame) {
-        println!("Displaying frame: {}", frame.data);
         let mut stdout = io::stdout();
-        // Write the frame data and check for errors
-        write!(stdout, "{}", frame.data).expect("Failed to write frame data");
-        // Write the log message using the same stdout handle
-        write!(stdout, "Displaying frame: {}\n", frame.data).expect("Failed to write log");
-        // Flush once at the end
+        stdout.write_all(&frame.data).unwrap();
         stdout.flush().expect("Failed to flush stdout");
     }
 

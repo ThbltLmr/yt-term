@@ -19,7 +19,11 @@ mod video_buffer;
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        default_value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    )]
     url: String,
 }
 
@@ -41,6 +45,7 @@ fn main() {
         width,
         height,
     );
+
     loop {
         let test_frame = kitty_encoder.encode_test_frame();
         display_manager.display_frame(test_frame);
