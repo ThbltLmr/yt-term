@@ -51,6 +51,7 @@ pub struct KittyGraphicsProtocolEncoder {
     kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
     width: usize,
     height: usize,
+    is_running: bool,
 }
 
 impl KittyGraphicsProtocolEncoder {
@@ -65,6 +66,7 @@ impl KittyGraphicsProtocolEncoder {
             kitty_buffer,
             width,
             height,
+            is_running: false,
         }
     }
 
@@ -114,8 +116,9 @@ impl KittyGraphicsProtocolEncoder {
         KittyGraphicsProtocolFrame::new(buffer, frame.timestamp)
     }
 
-    pub fn encode(&self) {
-        loop {
+    pub fn encode(&mut self) {
+        self.is_running = true;
+        while self.is_running {
             // Get the video frame from the video buffer
             let mut video_buffer = self.video_buffer.lock().unwrap();
             let frame = video_buffer.get_frame();
@@ -129,6 +132,10 @@ impl KittyGraphicsProtocolEncoder {
                 encoded_buffer.push_frame(encoded_frame);
             }
         }
+    }
+
+    pub fn stop(&mut self) {
+        self.is_running = false;
     }
 
     fn encode_control_data(&self, control_data: HashMap<String, String>) -> Vec<u8> {

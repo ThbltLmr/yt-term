@@ -40,7 +40,7 @@ fn main() {
         display_manager::DisplayManager::new(Arc::clone(&kitty_graphics_protocol_buffer));
     let frame_size = width * height * 3;
 
-    let kitty_graphics_protocol_encoder = KittyGraphicsProtocolEncoder::new(
+    let mut kitty_graphics_protocol_encoder = KittyGraphicsProtocolEncoder::new(
         Arc::clone(&video_buffer),
         Arc::clone(&kitty_graphics_protocol_buffer),
         width,
