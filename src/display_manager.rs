@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 
 use crate::kitty_encoder::KittyFrame;
+use crate::result::Res;
 use crate::ring_buffer::RingBuffer;
 use crate::{Arc, Mutex};
 
@@ -15,14 +16,29 @@ impl DisplayManager {
         DisplayManager { kitty_buffer }
     }
 
-    pub fn display_frame(&self, frame: KittyFrame) {
+    fn display_frame(&self, frame: KittyFrame) -> Res<()> {
         let mut stdout = io::stdout();
-        stdout.write_all(&frame.data).unwrap();
-        stdout.flush().expect("Failed to flush stdout");
+        stdout.write_all(&frame.data)?;
+        stdout.flush()?;
+        Ok(())
     }
 
-    pub fn display(&self) {
-        let mut current_timestamp = 0;
+    fn clear_terminal(&self) -> Res<()> {
+        let mut stdout = io::stdout();
+
+        let reset_cursor = b"\x1B[H";
+        let clear_terminal = b"\x1B[2J";
+        let mut buffer = vec![];
+
+        buffer.extend_from_slice(reset_cursor);
+        buffer.extend_from_slice(clear_terminal);
+        stdout.write_all(reset_cursor)?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    pub fn display(&self) -> Res<()> {
+        let now = std::time::Instant::now();
 
         loop {
             if self.kitty_buffer.lock().unwrap().len() == 0 {
@@ -31,25 +47,15 @@ impl DisplayManager {
             } else {
                 let kitty_frame = self.kitty_buffer.lock().unwrap().get_frame();
                 if let Some(frame) = kitty_frame {
-                    if frame.timestamp == current_timestamp {
-                        let mut stdout = io::stdout();
-
-                        let reset_cursor = b"\x1B[H";
-                        let clear_terminal = b"\x1B[2J";
-                        let mut buffer = vec![];
-
-                        buffer.extend_from_slice(reset_cursor);
-                        buffer.extend_from_slice(clear_terminal);
-                        stdout.write_all(reset_cursor).unwrap();
-                        stdout.flush().expect("Failed to flush stdout");
-
-                        self.display_frame(frame);
-                        current_timestamp += 40;
-                    } else {
-                        panic!("Frame timestamp mismatch");
+                    if std::time::Instant::now().duration_since(now).as_millis()
+                        >= frame.timestamp as u128
+                    {
+                        self.clear_terminal()?;
+                        self.display_frame(frame)?;
                     }
                 }
             }
         }
+        Ok(())
     }
 }
