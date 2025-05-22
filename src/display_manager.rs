@@ -35,7 +35,6 @@ impl DisplayManager {
                 let kitty_frame = self.kitty_buffer.lock().unwrap().get_frame();
                 if let Some(frame) = kitty_frame {
                     self.display_frame(frame);
-                    std::thread::sleep(std::time::Duration::from_millis(40));
                 }
             }
         }
