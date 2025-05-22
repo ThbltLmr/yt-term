@@ -7,29 +7,29 @@ use std::{
 
 use crate::video_buffer::{VideoBuffer, VideoFrame};
 
-pub struct KittyFrame {
+pub struct KittyGraphicsProtocolFrame {
     pub data: Vec<u8>,
     pub timestamp: u64,
 }
 
-impl KittyFrame {
+impl KittyGraphicsProtocolFrame {
     pub fn new(data: Vec<u8>, timestamp: u64) -> Self {
-        KittyFrame { data, timestamp }
+        KittyGraphicsProtocolFrame { data, timestamp }
     }
 }
 
-pub struct KittyBuffer {
-    frames: VecDeque<KittyFrame>,
+pub struct KittyGraphicsProtocolBuffer {
+    frames: VecDeque<KittyGraphicsProtocolFrame>,
 }
 
-impl RingBuffer<KittyFrame> for KittyBuffer {
+impl RingBuffer<KittyGraphicsProtocolFrame> for KittyGraphicsProtocolBuffer {
     fn new() -> Self {
-        KittyBuffer {
+        KittyGraphicsProtocolBuffer {
             frames: VecDeque::with_capacity(MAX_BUFFER_SIZE),
         }
     }
 
-    fn push_frame(&mut self, frame: KittyFrame) {
+    fn push_frame(&mut self, frame: KittyGraphicsProtocolFrame) {
         if self.frames.len() >= MAX_BUFFER_SIZE {
             // If buffer is full, remove the oldest frame
             self.frames.pop_front();
@@ -37,7 +37,7 @@ impl RingBuffer<KittyFrame> for KittyBuffer {
         self.frames.push_back(frame);
     }
 
-    fn get_frame(&mut self) -> Option<KittyFrame> {
+    fn get_frame(&mut self) -> Option<KittyGraphicsProtocolFrame> {
         self.frames.pop_front()
     }
 
@@ -46,21 +46,21 @@ impl RingBuffer<KittyFrame> for KittyBuffer {
     }
 }
 
-pub struct KittyEncoder {
+pub struct KittyGraphicsProtocolEncoder {
     video_buffer: Arc<Mutex<VideoBuffer>>,
-    kitty_buffer: Arc<Mutex<KittyBuffer>>,
+    kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
     width: usize,
     height: usize,
 }
 
-impl KittyEncoder {
+impl KittyGraphicsProtocolEncoder {
     pub fn new(
         video_buffer: Arc<Mutex<VideoBuffer>>,
-        kitty_buffer: Arc<Mutex<KittyBuffer>>,
+        kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
         width: usize,
         height: usize,
     ) -> Self {
-        KittyEncoder {
+        KittyGraphicsProtocolEncoder {
             video_buffer,
             kitty_buffer,
             width,
@@ -68,7 +68,7 @@ impl KittyEncoder {
         }
     }
 
-    pub fn encode_test_frame(&self) -> KittyFrame {
+    pub fn encode_test_frame(&self) -> KittyGraphicsProtocolFrame {
         // Create a test frame with a simple pattern
         let mut test_frame = Vec::new();
         for _y in 0..32 {
@@ -84,8 +84,8 @@ impl KittyEncoder {
             timestamp: 0,
         })
     }
-    // Convert a frame to Kitty graphics protocol
-    fn encode_frame_kitty(&self, frame: VideoFrame) -> KittyFrame {
+    // Convert a frame to KittyGraphicsProtocol graphics protocol
+    fn encode_frame_kitty(&self, frame: VideoFrame) -> KittyGraphicsProtocolFrame {
         // Base64 encode the frame data
         let (control_data, payload) = (
             HashMap::from([
@@ -111,7 +111,7 @@ impl KittyEncoder {
         buffer.extend_from_slice(&encoded_payload);
         buffer.extend_from_slice(suffix);
 
-        KittyFrame::new(buffer, frame.timestamp)
+        KittyGraphicsProtocolFrame::new(buffer, frame.timestamp)
     }
 
     pub fn encode(&self) {
@@ -121,12 +121,12 @@ impl KittyEncoder {
             let frame = video_buffer.get_frame();
 
             if let Some(frame) = frame {
-                // Encode the frame to Kitty graphics protocol
-                let kitty_frame = self.encode_frame_kitty(frame);
+                // Encode the frame to KittyGraphicsProtocol graphics protocol
+                let encoded_frame = self.encode_frame_kitty(frame);
 
                 // Push the encoded frame to the kitty buffer
-                let mut kitty_buffer = self.kitty_buffer.lock().unwrap();
-                kitty_buffer.push_frame(kitty_frame);
+                let mut encoded_buffer = self.kitty_buffer.lock().unwrap();
+                encoded_buffer.push_frame(encoded_frame);
             }
         }
     }

@@ -6,12 +6,12 @@ use std::{
 };
 
 use clap::Parser;
-use kitty_encoder::{KittyBuffer, KittyEncoder};
+use kitty_graphics_protocol_encoder::{KittyGraphicsProtocolBuffer, KittyGraphicsProtocolEncoder};
 use ring_buffer::RingBuffer;
 use video_buffer::{VideoBuffer, VideoFrame};
 
 mod display_manager;
-mod kitty_encoder;
+mod kitty_graphics_protocol_encoder;
 mod result;
 mod ring_buffer;
 mod video_buffer;
@@ -34,14 +34,15 @@ fn main() {
     let height = 360;
 
     let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
-    let kitty_buffer = Arc::new(Mutex::new(KittyBuffer::new()));
+    let kitty_graphics_protocol_buffer = Arc::new(Mutex::new(KittyGraphicsProtocolBuffer::new()));
 
-    let display_manager = display_manager::DisplayManager::new(Arc::clone(&kitty_buffer));
+    let display_manager =
+        display_manager::DisplayManager::new(Arc::clone(&kitty_graphics_protocol_buffer));
     let frame_size = width * height * 3;
 
-    let kitty_encoder = KittyEncoder::new(
+    let kitty_graphics_protocol_encoder = KittyGraphicsProtocolEncoder::new(
         Arc::clone(&video_buffer),
-        Arc::clone(&kitty_buffer),
+        Arc::clone(&kitty_graphics_protocol_buffer),
         width,
         height,
     );
@@ -85,8 +86,8 @@ fn main() {
     let mut read_buffer = vec![0u8; 32768]; // 32KB chunks
 
     let encode_thread = thread::spawn(move || {
-        // Start the Kitty encoder thread
-        kitty_encoder.encode();
+        // Start the KittyGraphicsProtocol encoder thread
+        kitty_graphics_protocol_encoder.encode();
     });
 
     let display_thread = thread::spawn(move || {

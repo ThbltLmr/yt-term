@@ -1,22 +1,24 @@
 use std::io::{self, Write};
 
-use crate::kitty_encoder::KittyFrame;
+use crate::kitty_graphics_protocol_encoder::KittyGraphicsProtocolFrame;
 use crate::result::Res;
 use crate::ring_buffer::RingBuffer;
 use crate::{Arc, Mutex};
 
-use crate::kitty_encoder::KittyBuffer;
+use crate::kitty_graphics_protocol_encoder::KittyGraphicsProtocolBuffer;
 
 pub struct DisplayManager {
-    kitty_buffer: Arc<Mutex<KittyBuffer>>,
+    kitty_graphics_protocolbuffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
 }
 
 impl DisplayManager {
-    pub fn new(kitty_buffer: Arc<Mutex<KittyBuffer>>) -> Self {
-        DisplayManager { kitty_buffer }
+    pub fn new(kitty_graphics_protocolbuffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>) -> Self {
+        DisplayManager {
+            kitty_graphics_protocolbuffer,
+        }
     }
 
-    fn display_frame(&self, frame: KittyFrame) -> Res<()> {
+    fn display_frame(&self, frame: KittyGraphicsProtocolFrame) -> Res<()> {
         let mut stdout = io::stdout();
         stdout.write_all(&frame.data)?;
         stdout.flush()?;
@@ -41,12 +43,16 @@ impl DisplayManager {
         let now = std::time::Instant::now();
 
         loop {
-            if self.kitty_buffer.lock().unwrap().len() == 0 {
+            if self.kitty_graphics_protocolbuffer.lock().unwrap().len() == 0 {
                 // No frames to display, sleep for a bit
                 std::thread::sleep(std::time::Duration::from_secs(3));
             } else {
-                let kitty_frame = self.kitty_buffer.lock().unwrap().get_frame();
-                if let Some(frame) = kitty_frame {
+                let kitty_graphics_protocolframe = self
+                    .kitty_graphics_protocolbuffer
+                    .lock()
+                    .unwrap()
+                    .get_frame();
+                if let Some(frame) = kitty_graphics_protocolframe {
                     if std::time::Instant::now().duration_since(now).as_millis()
                         >= frame.timestamp as u128
                     {
