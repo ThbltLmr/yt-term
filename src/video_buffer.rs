@@ -4,12 +4,11 @@ use crate::ring_buffer::{RingBuffer, MAX_BUFFER_SIZE};
 
 pub struct VideoFrame {
     pub data: Vec<u8>,
-    pub timestamp: u64,
 }
 
 impl VideoFrame {
-    pub fn new(data: Vec<u8>, timestamp: u64) -> Self {
-        VideoFrame { data, timestamp }
+    pub fn new(data: Vec<u8>) -> Self {
+        VideoFrame { data }
     }
 }
 

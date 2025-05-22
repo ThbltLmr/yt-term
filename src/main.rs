@@ -77,7 +77,6 @@ fn main() {
         .take()
         .expect("Failed to get ffmpeg stdout");
     // Create a buffer for reading one frame at a time
-    let mut timestamp = 0;
     let mut accumulated_data = Vec::new();
     // Buffer for reading chunks from stdout
     let mut read_buffer = vec![0u8; 32768]; // 32KB chunks
@@ -108,19 +107,10 @@ fn main() {
                     let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
 
                     // Create a new VideoFrame
-                    let frame = VideoFrame::new(frame_data, timestamp);
+                    let frame = VideoFrame::new(frame_data);
 
                     // Push to the buffer
                     video_buffer.lock().unwrap().push_frame(frame);
-
-                    // Update timestamp (assuming ~25, we increment by ~40)
-                    timestamp += 40;
-
-                    println!(
-                        "Frame buffered: {} (Buffer size: {})",
-                        timestamp,
-                        video_buffer.lock().unwrap().len()
-                    );
                 }
             }
             Err(e) => {
