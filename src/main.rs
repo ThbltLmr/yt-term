@@ -84,13 +84,14 @@ fn main() {
     // Buffer for reading chunks from stdout
     let mut read_buffer = vec![0u8; 32768]; // 32KB chunks
 
-    thread::spawn(move || {
+    let encode_thread = thread::spawn(move || {
         // Start the Kitty encoder thread
         kitty_encoder.encode();
     });
 
-    thread::spawn(move || {
-        display_manager.display();
+    let display_thread = thread::spawn(move || {
+        // Start the display manager thread
+        display_manager.display().expect("Failed to display frames");
     });
 
     // Read frames from ffmpeg and store them in the video buffer
@@ -134,4 +135,7 @@ fn main() {
     // Wait for processes to complete (though they might be terminated by Ctrl-C)
     let _ = ffmpeg_process.wait();
     let _ = yt_dlp_process.wait();
+    // Wait for threads to finish
+    let _ = encode_thread.join();
+    let _ = display_thread.join();
 }
