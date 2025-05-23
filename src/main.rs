@@ -27,13 +27,13 @@ struct Args {
     )]
     url: String,
 
-    #[clap(short, long, default_value = "640")]
+    #[clap(long, default_value = "640")]
     width: usize,
 
-    #[clap(short, long, default_value = "360")]
+    #[clap(long, default_value = "360")]
     height: usize,
 
-    #[clap(short, long, default_value = "25")]
+    #[clap(long, default_value = "25")]
     fps: usize,
 }
 
