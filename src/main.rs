@@ -38,6 +38,7 @@ struct Args {
 }
 
 fn main() {
+    let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
     let args = Args::parse();
     let Args {
         url,
@@ -48,8 +49,6 @@ fn main() {
 
     let frame_size = width * height * 3;
     let interval = 1000 / fps;
-
-    let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
 
     let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
     let kitty_graphics_protocol_buffer = Arc::new(Mutex::new(KittyGraphicsProtocolBuffer::new()));
