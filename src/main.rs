@@ -14,6 +14,7 @@ mod display_manager;
 mod kitty_graphics_protocol_encoder;
 mod result;
 mod ring_buffer;
+mod screen_guard;
 mod video_buffer;
 
 #[derive(Parser, Debug)]

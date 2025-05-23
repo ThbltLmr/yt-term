@@ -34,7 +34,7 @@ impl DisplayManager {
 
         buffer.extend_from_slice(reset_cursor);
         buffer.extend_from_slice(clear_terminal);
-        stdout.write_all(reset_cursor)?;
+        stdout.write_all(&buffer)?;
         stdout.flush()?;
         Ok(())
     }
