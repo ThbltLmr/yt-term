@@ -2,7 +2,7 @@ use crate::ring_buffer::{RingBuffer, MAX_BUFFER_SIZE};
 use base64::{engine::general_purpose, Engine as _};
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
 };
 
 use crate::video_buffer::{VideoBuffer, VideoFrame};
@@ -51,6 +51,8 @@ pub struct KittyGraphicsProtocolEncoder {
     kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
     width: usize,
     height: usize,
+    streaming_done_rx: mpsc::Receiver<()>,
+    encoding_done_tx: mpsc::Sender<()>,
 }
 
 impl KittyGraphicsProtocolEncoder {
@@ -59,12 +61,16 @@ impl KittyGraphicsProtocolEncoder {
         kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
         width: usize,
         height: usize,
+        streaming_done_rx: mpsc::Receiver<()>,
+        encoding_done_tx: mpsc::Sender<()>,
     ) -> Self {
         KittyGraphicsProtocolEncoder {
             video_buffer,
             kitty_buffer,
             width,
             height,
+            streaming_done_rx,
+            encoding_done_tx,
         }
     }
 
@@ -111,6 +117,13 @@ impl KittyGraphicsProtocolEncoder {
                 // Push the encoded frame to the kitty buffer
                 let mut encoded_buffer = self.kitty_buffer.lock().unwrap();
                 encoded_buffer.push_frame(encoded_frame);
+            } else {
+                if self.streaming_done_rx.try_recv().is_ok() {
+                    // If streaming is done and no more frames are available,
+                    // break the loop
+                    self.encoding_done_tx.send(()).unwrap();
+                    break;
+                }
             }
         }
     }

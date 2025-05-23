@@ -1,7 +1,7 @@
 use std::{
     io::Read,
     process::{Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
     thread,
 };
 
@@ -33,22 +33,27 @@ fn main() {
     let url = args.url;
     let width = 640;
     let height = 360;
+    let frame_size = width * height * 3;
 
     let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
 
     let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
     let kitty_graphics_protocol_buffer = Arc::new(Mutex::new(KittyGraphicsProtocolBuffer::new()));
 
-    let display_manager =
-        display_manager::DisplayManager::new(Arc::clone(&kitty_graphics_protocol_buffer));
-    let frame_size = width * height * 3;
+    let (streaming_done_tx, streaming_done_rx) = mpsc::channel::<()>();
+    let (encoding_done_tx, encoding_done_rx) = mpsc::channel::<()>();
 
     let mut kitty_graphics_protocol_encoder = KittyGraphicsProtocolEncoder::new(
         Arc::clone(&video_buffer),
         Arc::clone(&kitty_graphics_protocol_buffer),
         width,
         height,
+        streaming_done_rx,
+        encoding_done_tx,
     );
+
+    let display_manager =
+        display_manager::DisplayManager::new(Arc::clone(&kitty_graphics_protocol_buffer));
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
