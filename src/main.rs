@@ -34,6 +34,8 @@ fn main() {
     let width = 640;
     let height = 360;
 
+    let screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
+
     let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
     let kitty_graphics_protocol_buffer = Arc::new(Mutex::new(KittyGraphicsProtocolBuffer::new()));
 

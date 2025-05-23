@@ -25,15 +25,13 @@ impl DisplayManager {
         Ok(())
     }
 
-    fn clear_terminal(&self) -> Res<()> {
+    fn reset_cursor(&self) -> Res<()> {
         let mut stdout = io::stdout();
 
         let reset_cursor = b"\x1B[H";
-        let clear_terminal = b"\x1B[2J";
         let mut buffer = vec![];
 
         buffer.extend_from_slice(reset_cursor);
-        buffer.extend_from_slice(clear_terminal);
         stdout.write_all(&buffer)?;
         stdout.flush()?;
         Ok(())
@@ -56,7 +54,7 @@ impl DisplayManager {
                     if std::time::Instant::now().duration_since(now).as_millis()
                         >= frame.timestamp as u128
                     {
-                        self.clear_terminal()?;
+                        self.reset_cursor()?;
                         self.display_frame(frame)?;
                     }
                 }
