@@ -1,7 +1,4 @@
-use crate::{
-    result::Res,
-    ring_buffer::{RingBuffer, MAX_BUFFER_SIZE},
-};
+use crate::{result::Res, ring_buffer::RingBuffer};
 use base64::{engine::general_purpose, Engine as _};
 use std::{
     collections::{HashMap, VecDeque},
@@ -28,15 +25,11 @@ pub struct KittyGraphicsProtocolBuffer {
 impl RingBuffer<KittyGraphicsProtocolFrame> for KittyGraphicsProtocolBuffer {
     fn new() -> Self {
         KittyGraphicsProtocolBuffer {
-            frames: VecDeque::with_capacity(MAX_BUFFER_SIZE),
+            frames: VecDeque::new(),
         }
     }
 
     fn push_frame(&mut self, frame: KittyGraphicsProtocolFrame) {
-        if self.frames.len() >= MAX_BUFFER_SIZE {
-            // If buffer is full, remove the oldest frame
-            self.frames.pop_front();
-        }
         self.frames.push_back(frame);
     }
 

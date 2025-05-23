@@ -1,5 +1,3 @@
-pub const MAX_BUFFER_SIZE: usize = 10000;
-
 pub trait RingBuffer<T> {
     fn new() -> Self;
 
