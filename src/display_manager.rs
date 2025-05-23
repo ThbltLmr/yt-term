@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::sync::mpsc;
 
 use crate::kitty_graphics_protocol_encoder::KittyGraphicsProtocolFrame;
 use crate::result::Res;
@@ -9,12 +10,17 @@ use crate::kitty_graphics_protocol_encoder::KittyGraphicsProtocolBuffer;
 
 pub struct DisplayManager {
     kitty_graphics_protocolbuffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
+    encoding_done_rx: mpsc::Receiver<()>,
 }
 
 impl DisplayManager {
-    pub fn new(kitty_graphics_protocolbuffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>) -> Self {
+    pub fn new(
+        kitty_graphics_protocolbuffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
+        encoding_done_rx: mpsc::Receiver<()>,
+    ) -> Self {
         DisplayManager {
             kitty_graphics_protocolbuffer,
+            encoding_done_rx,
         }
     }
 
@@ -43,6 +49,9 @@ impl DisplayManager {
         loop {
             if self.kitty_graphics_protocolbuffer.lock().unwrap().len() == 0 {
                 // No frames to display, sleep for a bit
+                if self.encoding_done_rx.try_recv().is_ok() {
+                    return Ok(());
+                }
                 std::thread::sleep(std::time::Duration::from_secs(3));
             } else {
                 let kitty_graphics_protocolframe = self
@@ -60,6 +69,5 @@ impl DisplayManager {
                 }
             }
         }
-        Ok(())
     }
 }

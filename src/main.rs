@@ -52,8 +52,10 @@ fn main() {
         encoding_done_tx,
     );
 
-    let display_manager =
-        display_manager::DisplayManager::new(Arc::clone(&kitty_graphics_protocol_buffer));
+    let display_manager = display_manager::DisplayManager::new(
+        Arc::clone(&kitty_graphics_protocol_buffer),
+        encoding_done_rx,
+    );
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
@@ -95,7 +97,9 @@ fn main() {
 
     let encode_thread = thread::spawn(move || {
         // Start the KittyGraphicsProtocol encoder thread
-        kitty_graphics_protocol_encoder.encode();
+        kitty_graphics_protocol_encoder
+            .encode()
+            .expect("Failed to encode frames");
     });
 
     let display_thread = thread::spawn(move || {
@@ -108,6 +112,7 @@ fn main() {
         match ffmpeg_stdout.read(&mut read_buffer) {
             Ok(0) => {
                 // End of stream
+                streaming_done_tx.send(()).unwrap();
                 break;
             }
             Ok(bytes_read) => {

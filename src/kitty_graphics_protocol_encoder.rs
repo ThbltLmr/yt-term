@@ -1,4 +1,7 @@
-use crate::ring_buffer::{RingBuffer, MAX_BUFFER_SIZE};
+use crate::{
+    result::Res,
+    ring_buffer::{RingBuffer, MAX_BUFFER_SIZE},
+};
 use base64::{engine::general_purpose, Engine as _};
 use std::{
     collections::{HashMap, VecDeque},
@@ -104,7 +107,7 @@ impl KittyGraphicsProtocolEncoder {
         KittyGraphicsProtocolFrame::new(buffer, frame.timestamp)
     }
 
-    pub fn encode(&mut self) {
+    pub fn encode(&mut self) -> Res<()> {
         loop {
             // Get the video frame from the video buffer
             let mut video_buffer = self.video_buffer.lock().unwrap();
@@ -122,7 +125,7 @@ impl KittyGraphicsProtocolEncoder {
                     // If streaming is done and no more frames are available,
                     // break the loop
                     self.encoding_done_tx.send(()).unwrap();
-                    break;
+                    return Ok(());
                 }
             }
         }
