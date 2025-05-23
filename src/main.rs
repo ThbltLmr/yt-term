@@ -26,14 +26,28 @@ struct Args {
         default_value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     )]
     url: String,
+
+    #[clap(short, long, default_value = "640")]
+    width: usize,
+
+    #[clap(short, long, default_value = "360")]
+    height: usize,
+
+    #[clap(short, long, default_value = "25")]
+    fps: usize,
 }
 
 fn main() {
     let args = Args::parse();
-    let url = args.url;
-    let width = 640;
-    let height = 360;
+    let Args {
+        url,
+        width,
+        height,
+        fps,
+    } = args;
+
     let frame_size = width * height * 3;
+    let interval = 1000 / fps;
 
     let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
 
@@ -130,8 +144,7 @@ fn main() {
                     // Push to the buffer
                     video_buffer.lock().unwrap().push_frame(frame);
 
-                    // Update timestamp (assuming ~25, we increment by ~40)
-                    timestamp += 40;
+                    timestamp += interval as u64;
                 }
             }
             Err(e) => {
