@@ -51,6 +51,7 @@ pub struct KittyGraphicsProtocolEncoder {
     kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
     width: usize,
     height: usize,
+    ffmpeg_streaming: bool,
     is_running: bool,
 }
 
@@ -66,26 +67,11 @@ impl KittyGraphicsProtocolEncoder {
             kitty_buffer,
             width,
             height,
+            ffmpeg_streaming: false,
             is_running: false,
         }
     }
 
-    pub fn encode_test_frame(&self) -> KittyGraphicsProtocolFrame {
-        // Create a test frame with a simple pattern
-        let mut test_frame = Vec::new();
-        for _y in 0..32 {
-            for _x in 0..32 {
-                test_frame.push(255);
-                test_frame.push(0);
-                test_frame.push(0);
-            }
-        }
-
-        self.encode_frame_kitty(VideoFrame {
-            data: test_frame,
-            timestamp: 0,
-        })
-    }
     // Convert a frame to KittyGraphicsProtocol graphics protocol
     fn encode_frame_kitty(&self, frame: VideoFrame) -> KittyGraphicsProtocolFrame {
         // Base64 encode the frame data
@@ -132,6 +118,10 @@ impl KittyGraphicsProtocolEncoder {
                 encoded_buffer.push_frame(encoded_frame);
             }
         }
+    }
+
+    pub fn set_streaming(&mut self, streaming: bool) {
+        self.ffmpeg_streaming = streaming;
     }
 
     pub fn stop(&mut self) {
