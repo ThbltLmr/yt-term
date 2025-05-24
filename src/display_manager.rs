@@ -6,17 +6,17 @@ use crate::ring_buffer::{Frame, RingBuffer};
 use crate::{Arc, Mutex};
 
 pub struct DisplayManager {
-    kitty_graphics_protocol_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     encoding_done_rx: mpsc::Receiver<()>,
 }
 
 impl DisplayManager {
     pub fn new(
-        kitty_graphics_protocolbuffer: Arc<Mutex<RingBuffer<Frame>>>,
+        encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         encoding_done_rx: mpsc::Receiver<()>,
     ) -> Self {
         DisplayManager {
-            kitty_graphics_protocol_buffer: kitty_graphics_protocolbuffer,
+            encoded_buffer,
             encoding_done_rx,
         }
     }
@@ -44,18 +44,14 @@ impl DisplayManager {
         let now = std::time::Instant::now();
 
         loop {
-            if self.kitty_graphics_protocol_buffer.lock().unwrap().len() == 0 {
+            if self.encoded_buffer.lock().unwrap().len() == 0 {
                 if self.encoding_done_rx.try_recv().is_ok() {
                     return Ok(());
                 }
                 std::thread::sleep(std::time::Duration::from_secs(3));
             } else {
-                let kitty_graphics_protocolframe = self
-                    .kitty_graphics_protocol_buffer
-                    .lock()
-                    .unwrap()
-                    .get_frame();
-                if let Some(frame) = kitty_graphics_protocolframe {
+                let encoded_frame = self.encoded_buffer.lock().unwrap().get_frame();
+                if let Some(frame) = encoded_frame {
                     if std::time::Instant::now().duration_since(now).as_millis()
                         >= frame.timestamp as u128
                     {

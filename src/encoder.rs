@@ -8,27 +8,27 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-pub struct KittyGraphicsProtocolEncoder {
+pub struct Encoder {
     video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-    kitty_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     width: usize,
     height: usize,
     streaming_done_rx: mpsc::Receiver<()>,
     encoding_done_tx: mpsc::Sender<()>,
 }
 
-impl KittyGraphicsProtocolEncoder {
+impl Encoder {
     pub fn new(
         video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-        kitty_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+        encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,
         encoding_done_tx: mpsc::Sender<()>,
     ) -> Self {
-        KittyGraphicsProtocolEncoder {
+        Encoder {
             video_buffer,
-            kitty_buffer,
+            encoded_buffer,
             width,
             height,
             streaming_done_rx,
@@ -36,8 +36,8 @@ impl KittyGraphicsProtocolEncoder {
         }
     }
 
-    // Convert a frame to KittyGraphicsProtocol graphics protocol
-    fn encode_frame_kitty(&self, frame: Frame) -> Frame {
+    // Convert a frame to the Kitty Graphics Protocol format
+    fn encode_frame(&self, frame: Frame) -> Frame {
         // Base64 encode the frame data
         let (control_data, payload) = (
             HashMap::from([
@@ -72,8 +72,8 @@ impl KittyGraphicsProtocolEncoder {
             let frame = video_buffer.get_frame();
 
             if let Some(frame) = frame {
-                let encoded_frame = self.encode_frame_kitty(frame);
-                let mut encoded_buffer = self.kitty_buffer.lock().unwrap();
+                let encoded_frame = self.encode_frame(frame);
+                let mut encoded_buffer = self.encoded_buffer.lock().unwrap();
 
                 encoded_buffer.push_frame(encoded_frame);
             } else {

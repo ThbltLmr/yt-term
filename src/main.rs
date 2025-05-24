@@ -7,12 +7,12 @@ use std::{
 
 use args::Args;
 use clap::Parser;
-use kitty_graphics_protocol_encoder::KittyGraphicsProtocolEncoder;
+use encoder::Encoder;
 use ring_buffer::{Frame, RingBuffer};
 
 mod args;
 mod display_manager;
-mod kitty_graphics_protocol_encoder;
+mod encoder;
 mod result;
 mod ring_buffer;
 mod screen_guard;
@@ -32,24 +32,22 @@ fn main() {
     let interval = 1000 / fps;
 
     let video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
-    let kitty_graphics_protocol_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
+    let encoded_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
 
     let (streaming_done_tx, streaming_done_rx) = mpsc::channel::<()>();
     let (encoding_done_tx, encoding_done_rx) = mpsc::channel::<()>();
 
-    let mut kitty_graphics_protocol_encoder = KittyGraphicsProtocolEncoder::new(
+    let mut encoder = Encoder::new(
         Arc::clone(&video_buffer),
-        Arc::clone(&kitty_graphics_protocol_buffer),
+        Arc::clone(&encoded_buffer),
         width,
         height,
         streaming_done_rx,
         encoding_done_tx,
     );
 
-    let display_manager = display_manager::DisplayManager::new(
-        Arc::clone(&kitty_graphics_protocol_buffer),
-        encoding_done_rx,
-    );
+    let display_manager =
+        display_manager::DisplayManager::new(Arc::clone(&encoded_buffer), encoding_done_rx);
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
@@ -88,9 +86,7 @@ fn main() {
     let mut read_buffer = vec![0u8; 32768];
 
     let encode_thread = thread::spawn(move || {
-        kitty_graphics_protocol_encoder
-            .encode()
-            .expect("Failed to encode frames");
+        encoder.encode().expect("Failed to encode frames");
     });
 
     let display_thread = thread::spawn(move || {
