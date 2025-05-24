@@ -6,9 +6,9 @@ use std::{
 };
 
 use clap::Parser;
-use kitty_graphics_protocol_encoder::{KittyGraphicsProtocolBuffer, KittyGraphicsProtocolEncoder};
+use kitty_graphics_protocol_encoder::{KittyGraphicsProtocolEncoder, KittyGraphicsProtocolFrame};
 use ring_buffer::RingBuffer;
-use video_buffer::{VideoBuffer, VideoFrame};
+use video_buffer::VideoFrame;
 
 mod display_manager;
 mod kitty_graphics_protocol_encoder;
@@ -50,8 +50,9 @@ fn main() {
     let frame_size = width * height * 3;
     let interval = 1000 / fps;
 
-    let video_buffer = Arc::new(Mutex::new(VideoBuffer::new()));
-    let kitty_graphics_protocol_buffer = Arc::new(Mutex::new(KittyGraphicsProtocolBuffer::new()));
+    let video_buffer = Arc::new(Mutex::new(RingBuffer::<VideoFrame>::new()));
+    let kitty_graphics_protocol_buffer =
+        Arc::new(Mutex::new(RingBuffer::<KittyGraphicsProtocolFrame>::new()));
 
     let (streaming_done_tx, streaming_done_rx) = mpsc::channel::<()>();
     let (encoding_done_tx, encoding_done_rx) = mpsc::channel::<()>();

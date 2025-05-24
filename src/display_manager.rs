@@ -6,20 +6,18 @@ use crate::result::Res;
 use crate::ring_buffer::RingBuffer;
 use crate::{Arc, Mutex};
 
-use crate::kitty_graphics_protocol_encoder::KittyGraphicsProtocolBuffer;
-
 pub struct DisplayManager {
-    kitty_graphics_protocolbuffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
+    kitty_graphics_protocol_buffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
     encoding_done_rx: mpsc::Receiver<()>,
 }
 
 impl DisplayManager {
     pub fn new(
-        kitty_graphics_protocolbuffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
+        kitty_graphics_protocolbuffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
         encoding_done_rx: mpsc::Receiver<()>,
     ) -> Self {
         DisplayManager {
-            kitty_graphics_protocolbuffer,
+            kitty_graphics_protocol_buffer: kitty_graphics_protocolbuffer,
             encoding_done_rx,
         }
     }
@@ -47,7 +45,7 @@ impl DisplayManager {
         let now = std::time::Instant::now();
 
         loop {
-            if self.kitty_graphics_protocolbuffer.lock().unwrap().len() == 0 {
+            if self.kitty_graphics_protocol_buffer.lock().unwrap().len() == 0 {
                 // No frames to display, sleep for a bit
                 if self.encoding_done_rx.try_recv().is_ok() {
                     return Ok(());
@@ -55,7 +53,7 @@ impl DisplayManager {
                 std::thread::sleep(std::time::Duration::from_secs(3));
             } else {
                 let kitty_graphics_protocolframe = self
-                    .kitty_graphics_protocolbuffer
+                    .kitty_graphics_protocol_buffer
                     .lock()
                     .unwrap()
                     .get_frame();

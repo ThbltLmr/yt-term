@@ -5,7 +5,7 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use crate::video_buffer::{VideoBuffer, VideoFrame};
+use crate::video_buffer::VideoFrame;
 
 pub struct KittyGraphicsProtocolFrame {
     pub data: Vec<u8>,
@@ -18,33 +18,9 @@ impl KittyGraphicsProtocolFrame {
     }
 }
 
-pub struct KittyGraphicsProtocolBuffer {
-    frames: VecDeque<KittyGraphicsProtocolFrame>,
-}
-
-impl RingBuffer<KittyGraphicsProtocolFrame> for KittyGraphicsProtocolBuffer {
-    fn new() -> Self {
-        KittyGraphicsProtocolBuffer {
-            frames: VecDeque::new(),
-        }
-    }
-
-    fn push_frame(&mut self, frame: KittyGraphicsProtocolFrame) {
-        self.frames.push_back(frame);
-    }
-
-    fn get_frame(&mut self) -> Option<KittyGraphicsProtocolFrame> {
-        self.frames.pop_front()
-    }
-
-    fn len(&self) -> usize {
-        self.frames.len()
-    }
-}
-
 pub struct KittyGraphicsProtocolEncoder {
-    video_buffer: Arc<Mutex<VideoBuffer>>,
-    kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
+    video_buffer: Arc<Mutex<RingBuffer<VideoFrame>>>,
+    kitty_buffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
     width: usize,
     height: usize,
     streaming_done_rx: mpsc::Receiver<()>,
@@ -53,8 +29,8 @@ pub struct KittyGraphicsProtocolEncoder {
 
 impl KittyGraphicsProtocolEncoder {
     pub fn new(
-        video_buffer: Arc<Mutex<VideoBuffer>>,
-        kitty_buffer: Arc<Mutex<KittyGraphicsProtocolBuffer>>,
+        video_buffer: Arc<Mutex<RingBuffer<VideoFrame>>>,
+        kitty_buffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,

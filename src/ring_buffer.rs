@@ -1,9 +1,25 @@
-pub trait RingBuffer<T> {
-    fn new() -> Self;
+use std::collections::VecDeque;
 
-    fn push_frame(&mut self, frame: T);
+pub struct RingBuffer<T> {
+    frames: VecDeque<T>,
+}
 
-    fn get_frame(&mut self) -> Option<T>;
+impl<T> RingBuffer<T> {
+    pub fn new() -> Self {
+        RingBuffer {
+            frames: VecDeque::new(),
+        }
+    }
 
-    fn len(&self) -> usize;
+    pub fn push_frame(&mut self, frame: T) {
+        self.frames.push_back(frame);
+    }
+
+    pub fn get_frame(&mut self) -> Option<T> {
+        self.frames.pop_front()
+    }
+
+    pub fn len(&self) -> usize {
+        self.frames.len()
+    }
 }
