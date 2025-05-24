@@ -45,7 +45,6 @@ impl DisplayManager {
 
         loop {
             if self.kitty_graphics_protocol_buffer.lock().unwrap().len() == 0 {
-                // No frames to display, sleep for a bit
                 if self.encoding_done_rx.try_recv().is_ok() {
                     return Ok(());
                 }

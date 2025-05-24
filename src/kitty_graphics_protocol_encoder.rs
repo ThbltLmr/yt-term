@@ -68,21 +68,16 @@ impl KittyGraphicsProtocolEncoder {
 
     pub fn encode(&mut self) -> Res<()> {
         loop {
-            // Get the video frame from the video buffer
             let mut video_buffer = self.video_buffer.lock().unwrap();
             let frame = video_buffer.get_frame();
 
             if let Some(frame) = frame {
-                // Encode the frame to KittyGraphicsProtocol graphics protocol
                 let encoded_frame = self.encode_frame_kitty(frame);
-
-                // Push the encoded frame to the kitty buffer
                 let mut encoded_buffer = self.kitty_buffer.lock().unwrap();
+
                 encoded_buffer.push_frame(encoded_frame);
             } else {
                 if self.streaming_done_rx.try_recv().is_ok() {
-                    // If streaming is done and no more frames are available,
-                    // break the loop
                     self.encoding_done_tx.send(()).unwrap();
                     return Ok(());
                 }

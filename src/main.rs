@@ -37,6 +37,7 @@ struct Args {
 
 fn main() {
     let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
+
     let args = Args::parse();
     let Args {
         url,
@@ -71,8 +72,8 @@ fn main() {
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
             "-o",
-            "-",         // Output to stdout
-            "--no-part", // Don't create .part files
+            "-",
+            "--no-part",
             "-f",
             format!("bestvideo[height={height}][width={width}]").as_str(),
             &url,
@@ -86,11 +87,8 @@ fn main() {
     let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
 
     let mut ffmpeg_process = Command::new("ffmpeg")
-        .args([
-            "-i", "pipe:0", // Read from stdin
-            "-f", "rawvideo", "-pix_fmt", "rgb24", "-", // Output to stdout
-        ])
-        .stdin(Stdio::from(yt_dlp_stdout)) // Connect the pipes
+        .args(["-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+        .stdin(Stdio::from(yt_dlp_stdout))
         .stderr(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
@@ -100,21 +98,20 @@ fn main() {
         .stdout
         .take()
         .expect("Failed to get ffmpeg stdout");
-    // Create a buffer for reading one frame at a time
+
     let mut timestamp = 0;
     let mut accumulated_data = Vec::new();
-    // Buffer for reading chunks from stdout
-    let mut read_buffer = vec![0u8; 32768]; // 32KB chunks
+
+    // 32KB chunks, chunks that yt-dlp outputs
+    let mut read_buffer = vec![0u8; 32768];
 
     let encode_thread = thread::spawn(move || {
-        // Start the KittyGraphicsProtocol encoder thread
         kitty_graphics_protocol_encoder
             .encode()
             .expect("Failed to encode frames");
     });
 
     let display_thread = thread::spawn(move || {
-        // Start the display manager thread
         display_manager.display().expect("Failed to display frames");
     });
 
@@ -122,23 +119,17 @@ fn main() {
     loop {
         match ffmpeg_stdout.read(&mut read_buffer) {
             Ok(0) => {
-                // End of stream
                 streaming_done_tx.send(()).unwrap();
                 break;
             }
             Ok(bytes_read) => {
-                // Append the newly read data to our accumulated buffer
                 accumulated_data.extend_from_slice(&read_buffer[0..bytes_read]);
 
                 // Process complete frames
                 while accumulated_data.len() >= frame_size {
-                    // Extract a frame
                     let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
-
-                    // Create a new VideoFrame
                     let frame = Frame::new(frame_data, timestamp);
 
-                    // Push to the buffer
                     video_buffer.lock().unwrap().push_frame(frame);
 
                     timestamp += interval as u64;
@@ -156,9 +147,10 @@ fn main() {
         println!("Leftover incomplete data: {} bytes", accumulated_data.len());
     }
 
-    // Wait for processes to complete (though they might be terminated by Ctrl-C)
+    // Wait for processes to complete
     let _ = ffmpeg_process.wait();
     let _ = yt_dlp_process.wait();
+
     // Wait for threads to finish
     let _ = encode_thread.join();
     let _ = display_thread.join();
