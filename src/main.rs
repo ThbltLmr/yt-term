@@ -6,16 +6,14 @@ use std::{
 };
 
 use clap::Parser;
-use kitty_graphics_protocol_encoder::{KittyGraphicsProtocolEncoder, KittyGraphicsProtocolFrame};
-use ring_buffer::RingBuffer;
-use video_buffer::VideoFrame;
+use kitty_graphics_protocol_encoder::KittyGraphicsProtocolEncoder;
+use ring_buffer::{Frame, RingBuffer};
 
 mod display_manager;
 mod kitty_graphics_protocol_encoder;
 mod result;
 mod ring_buffer;
 mod screen_guard;
-mod video_buffer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -50,9 +48,8 @@ fn main() {
     let frame_size = width * height * 3;
     let interval = 1000 / fps;
 
-    let video_buffer = Arc::new(Mutex::new(RingBuffer::<VideoFrame>::new()));
-    let kitty_graphics_protocol_buffer =
-        Arc::new(Mutex::new(RingBuffer::<KittyGraphicsProtocolFrame>::new()));
+    let video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
+    let kitty_graphics_protocol_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
 
     let (streaming_done_tx, streaming_done_rx) = mpsc::channel::<()>();
     let (encoding_done_tx, encoding_done_rx) = mpsc::channel::<()>();
@@ -139,7 +136,7 @@ fn main() {
                     let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
 
                     // Create a new VideoFrame
-                    let frame = VideoFrame::new(frame_data, timestamp);
+                    let frame = Frame::new(frame_data, timestamp);
 
                     // Push to the buffer
                     video_buffer.lock().unwrap().push_frame(frame);

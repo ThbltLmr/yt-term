@@ -1,5 +1,16 @@
 use std::collections::VecDeque;
 
+pub struct Frame {
+    pub data: Vec<u8>,
+    pub timestamp: u64,
+}
+
+impl Frame {
+    pub fn new(data: Vec<u8>, timestamp: u64) -> Self {
+        Frame { data, timestamp }
+    }
+}
+
 pub struct RingBuffer<T> {
     frames: VecDeque<T>,
 }

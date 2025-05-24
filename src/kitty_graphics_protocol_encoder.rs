@@ -1,26 +1,16 @@
-use crate::{result::Res, ring_buffer::RingBuffer};
+use crate::{
+    result::Res,
+    ring_buffer::{Frame, RingBuffer},
+};
 use base64::{engine::general_purpose, Engine as _};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     sync::{mpsc, Arc, Mutex},
 };
 
-use crate::video_buffer::VideoFrame;
-
-pub struct KittyGraphicsProtocolFrame {
-    pub data: Vec<u8>,
-    pub timestamp: u64,
-}
-
-impl KittyGraphicsProtocolFrame {
-    pub fn new(data: Vec<u8>, timestamp: u64) -> Self {
-        KittyGraphicsProtocolFrame { data, timestamp }
-    }
-}
-
 pub struct KittyGraphicsProtocolEncoder {
-    video_buffer: Arc<Mutex<RingBuffer<VideoFrame>>>,
-    kitty_buffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
+    video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    kitty_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     width: usize,
     height: usize,
     streaming_done_rx: mpsc::Receiver<()>,
@@ -29,8 +19,8 @@ pub struct KittyGraphicsProtocolEncoder {
 
 impl KittyGraphicsProtocolEncoder {
     pub fn new(
-        video_buffer: Arc<Mutex<RingBuffer<VideoFrame>>>,
-        kitty_buffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
+        video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+        kitty_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,
@@ -47,7 +37,7 @@ impl KittyGraphicsProtocolEncoder {
     }
 
     // Convert a frame to KittyGraphicsProtocol graphics protocol
-    fn encode_frame_kitty(&self, frame: VideoFrame) -> KittyGraphicsProtocolFrame {
+    fn encode_frame_kitty(&self, frame: Frame) -> Frame {
         // Base64 encode the frame data
         let (control_data, payload) = (
             HashMap::from([
@@ -73,7 +63,7 @@ impl KittyGraphicsProtocolEncoder {
         buffer.extend_from_slice(&encoded_payload);
         buffer.extend_from_slice(suffix);
 
-        KittyGraphicsProtocolFrame::new(buffer, frame.timestamp)
+        Frame::new(buffer, frame.timestamp)
     }
 
     pub fn encode(&mut self) -> Res<()> {

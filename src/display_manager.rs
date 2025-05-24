@@ -1,19 +1,18 @@
 use std::io::{self, Write};
 use std::sync::mpsc;
 
-use crate::kitty_graphics_protocol_encoder::KittyGraphicsProtocolFrame;
 use crate::result::Res;
-use crate::ring_buffer::RingBuffer;
+use crate::ring_buffer::{Frame, RingBuffer};
 use crate::{Arc, Mutex};
 
 pub struct DisplayManager {
-    kitty_graphics_protocol_buffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
+    kitty_graphics_protocol_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     encoding_done_rx: mpsc::Receiver<()>,
 }
 
 impl DisplayManager {
     pub fn new(
-        kitty_graphics_protocolbuffer: Arc<Mutex<RingBuffer<KittyGraphicsProtocolFrame>>>,
+        kitty_graphics_protocolbuffer: Arc<Mutex<RingBuffer<Frame>>>,
         encoding_done_rx: mpsc::Receiver<()>,
     ) -> Self {
         DisplayManager {
@@ -22,7 +21,7 @@ impl DisplayManager {
         }
     }
 
-    fn display_frame(&self, frame: KittyGraphicsProtocolFrame) -> Res<()> {
+    fn display_frame(&self, frame: Frame) -> Res<()> {
         let mut stdout = io::stdout();
         stdout.write_all(&frame.data)?;
         stdout.flush()?;
