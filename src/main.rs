@@ -5,35 +5,17 @@ use std::{
     thread,
 };
 
+use args::Args;
 use clap::Parser;
 use kitty_graphics_protocol_encoder::KittyGraphicsProtocolEncoder;
 use ring_buffer::{Frame, RingBuffer};
 
+mod args;
 mod display_manager;
 mod kitty_graphics_protocol_encoder;
 mod result;
 mod ring_buffer;
 mod screen_guard;
-
-#[derive(Parser, Debug)]
-#[clap(author, version, about)]
-struct Args {
-    #[clap(
-        short,
-        long,
-        default_value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    )]
-    url: String,
-
-    #[clap(long, default_value = "640")]
-    width: usize,
-
-    #[clap(long, default_value = "360")]
-    height: usize,
-
-    #[clap(long, default_value = "25")]
-    fps: usize,
-}
 
 fn main() {
     let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
