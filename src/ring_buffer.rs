@@ -34,3 +34,28 @@ impl<T> RingBuffer<T> {
         self.frames.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ring_buffer() {
+        let mut buffer = RingBuffer::new();
+        assert_eq!(buffer.len(), 0);
+
+        let frame1 = Frame::new(vec![1, 2, 3], 123456789);
+        let frame2 = Frame::new(vec![4, 5, 6], 987654321);
+
+        buffer.push_frame(frame1);
+        buffer.push_frame(frame2);
+
+        assert_eq!(buffer.len(), 2);
+
+        let retrieved_frame = buffer.get_frame().unwrap();
+        assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
+        assert_eq!(retrieved_frame.timestamp, 123456789);
+
+        assert_eq!(buffer.len(), 1);
+    }
+}
