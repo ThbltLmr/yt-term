@@ -63,3 +63,38 @@ impl DisplayManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ring_buffer::RingBuffer;
+    use std::sync::mpsc;
+
+    #[test]
+    fn test_display_manager() {
+        let (tx, rx) = mpsc::channel();
+        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let display_manager = DisplayManager::new(encoded_buffer.clone(), rx);
+
+        let frame = Frame {
+            data: vec![1, 2, 3],
+            timestamp: 1000,
+        };
+
+        encoded_buffer.lock().unwrap().push_frame(frame);
+
+        std::thread::spawn(move || {
+            display_manager.display().unwrap();
+        });
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        tx.send(()).unwrap();
+
+        assert_eq!(
+            encoded_buffer.lock().unwrap().len(),
+            0,
+            "Buffer should be empty after sending done signal",
+        );
+    }
+}
