@@ -31,3 +31,14 @@ impl Drop for ScreenGuard {
         stdout.flush().unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_screen_guard() {
+        let guard = ScreenGuard::new();
+        assert!(guard.is_ok());
+    }
+}
