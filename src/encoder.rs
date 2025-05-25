@@ -99,3 +99,84 @@ impl Encoder {
         encoded.as_bytes().to_vec()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ring_buffer::RingBuffer;
+    use std::sync::{mpsc, Arc, Mutex};
+
+    #[test]
+    fn test_new_encoder() {
+        let video_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
+        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
+
+        let encoder = Encoder::new(
+            video_buffer.clone(),
+            encoded_buffer.clone(),
+            640,
+            480,
+            streaming_done_rx,
+            encoding_done_tx,
+        );
+
+        assert_eq!(encoder.width, 640);
+        assert_eq!(encoder.height, 480);
+    }
+
+    #[test]
+    fn test_encode_control_data() {
+        let encoder = Encoder::new(
+            Arc::new(Mutex::new(RingBuffer::new())),
+            Arc::new(Mutex::new(RingBuffer::new())),
+            640,
+            480,
+            mpsc::channel().1,
+            mpsc::channel().0,
+        );
+
+        let control_data = HashMap::from([
+            ("f".into(), "24".into()),
+            ("s".into(), "640".into()),
+            ("v".into(), "480".into()),
+        ]);
+
+        let encoded_data = encoder.encode_control_data(control_data);
+        assert!(String::from_utf8(encoded_data.clone()).is_ok());
+        assert!(String::from_utf8(encoded_data.clone())
+            .unwrap()
+            .contains("f=24"));
+        assert!(String::from_utf8(encoded_data.clone())
+            .unwrap()
+            .contains("s=640"));
+        assert!(String::from_utf8(encoded_data.clone())
+            .unwrap()
+            .contains("v=480"));
+    }
+
+    #[test]
+    fn test_encode_frame() {
+        let video_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
+        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
+
+        let mut encoder = Encoder::new(
+            video_buffer.clone(),
+            encoded_buffer.clone(),
+            640,
+            480,
+            streaming_done_rx,
+            encoding_done_tx,
+        );
+
+        let test_frame = Frame::new(vec![0; 640 * 480 * 3], 0);
+        video_buffer.lock().unwrap().push_frame(test_frame);
+
+        encoder.encode().unwrap();
+
+        assert_eq!(encoded_buffer.lock().unwrap().len(), 1);
+    }
+}
