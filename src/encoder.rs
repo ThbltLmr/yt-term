@@ -210,4 +210,27 @@ mod tests {
 
         assert_eq!(encoded_buffer.lock().unwrap().len(), 1);
     }
+
+    #[test]
+    fn test_get_terminal_size() {
+        let video_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
+        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
+
+        let encoder = Encoder::new(
+            video_buffer.clone(),
+            encoded_buffer.clone(),
+            640,
+            480,
+            streaming_done_rx,
+            encoding_done_tx,
+        )
+        .unwrap();
+
+        assert!(
+            encoder.term_width > 0 && encoder.term_height > 0,
+            "Terminal size should be greater than zero"
+        );
+    }
 }
