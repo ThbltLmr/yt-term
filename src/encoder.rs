@@ -132,7 +132,10 @@ impl Encoder {
 mod tests {
     use super::*;
     use crate::ring_buffer::RingBuffer;
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::{
+        sync::{mpsc, Arc, Mutex},
+        thread,
+    };
 
     #[test]
     fn test_new_encoder() {
@@ -190,7 +193,7 @@ mod tests {
     fn test_encode_frame() {
         let video_buffer = Arc::new(Mutex::new(RingBuffer::new()));
         let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
-        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
+        let (streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
         let mut encoder = Encoder::new(
@@ -206,7 +209,12 @@ mod tests {
         let test_frame = Frame::new(vec![0; 640 * 480 * 3], 0);
         video_buffer.lock().unwrap().push_frame(test_frame);
 
-        encoder.encode().unwrap();
+        thread::spawn(move || {
+            encoder.encode().unwrap();
+        });
+
+        thread::sleep(std::time::Duration::from_millis(100));
+        streaming_done_tx.send(()).unwrap();
 
         assert_eq!(encoded_buffer.lock().unwrap().len(), 1);
     }
