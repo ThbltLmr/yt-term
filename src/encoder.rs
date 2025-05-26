@@ -28,10 +28,19 @@ impl Encoder {
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,
         encoding_done_tx: mpsc::Sender<()>,
-    ) -> Self {
+    ) -> Res<Self> {
         let (term_width, term_height) =
             Self::get_terminal_size().expect("Failed to get terminal size");
-        Encoder {
+
+        if term_width == 0 || term_height == 0 {
+            return Err("Invalid terminal size".into());
+        }
+
+        if width > term_width as usize || height > term_height as usize {
+            return Err("Video dimensions exceed terminal size".into());
+        }
+
+        Ok(Encoder {
             video_buffer,
             encoded_buffer,
             width,
@@ -40,25 +49,13 @@ impl Encoder {
             term_height,
             streaming_done_rx,
             encoding_done_tx,
-        }
+        })
     }
 
     // Convert a frame to the Kitty Graphics Protocol format
-    fn encode_frame(&self, frame: Frame) -> Frame {
+    fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
         // Base64 encode the frame data
-        let (control_data, payload) = (
-            HashMap::from([
-                ("f".into(), "24".into()),
-                ("s".into(), format!("{}", self.width).into()),
-                ("v".into(), format!("{}", self.height).into()),
-                ("t".into(), "d".into()),
-                ("a".into(), "T".into()),
-            ]),
-            frame.data,
-        );
-
-        let encoded_payload = self.encode_rbg(payload);
-        let encoded_control_data = self.encode_control_data(control_data);
+        let encoded_payload = self.encode_rbg(frame.data);
         let prefix = b"\x1b_G";
         let suffix = b"\x1b\\";
         let delimiter = b";";
@@ -76,10 +73,18 @@ impl Encoder {
     pub fn encode(&mut self) -> Res<()> {
         loop {
             let mut video_buffer = self.video_buffer.lock().unwrap();
+            let encoded_control_data = self.encode_control_data(HashMap::from([
+                ("f".into(), "24".into()),
+                ("s".into(), format!("{}", self.width).into()),
+                ("v".into(), format!("{}", self.height).into()),
+                ("t".into(), "d".into()),
+                ("a".into(), "T".into()),
+            ]));
+
             let frame = video_buffer.get_frame();
 
             if let Some(frame) = frame {
-                let encoded_frame = self.encode_frame(frame);
+                let encoded_frame = self.encode_frame(encoded_control_data, frame);
                 let mut encoded_buffer = self.encoded_buffer.lock().unwrap();
 
                 encoded_buffer.push_frame(encoded_frame);
@@ -138,7 +143,8 @@ mod tests {
             480,
             streaming_done_rx,
             encoding_done_tx,
-        );
+        )
+        .unwrap();
 
         assert_eq!(encoder.width, 640);
         assert_eq!(encoder.height, 480);
@@ -153,7 +159,8 @@ mod tests {
             480,
             mpsc::channel().1,
             mpsc::channel().0,
-        );
+        )
+        .unwrap();
 
         let control_data = HashMap::from([
             ("f".into(), "24".into()),
@@ -188,7 +195,8 @@ mod tests {
             480,
             streaming_done_rx,
             encoding_done_tx,
-        );
+        )
+        .unwrap();
 
         let test_frame = Frame::new(vec![0; 640 * 480 * 3], 0);
         video_buffer.lock().unwrap().push_frame(test_frame);
