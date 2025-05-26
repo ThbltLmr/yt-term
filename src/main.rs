@@ -94,7 +94,7 @@ fn main() {
                 "--no-part",
                 "-f",
                 format!("bestaudio").as_str(),
-                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                &url,
             ])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
