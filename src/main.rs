@@ -86,6 +86,38 @@ fn main() {
     // 32KB chunks, chunks that yt-dlp outputs
     let mut read_buffer = vec![0u8; 32768];
 
+    let audio_thread = thread::spawn(move || {
+        let mut yt_dlp_process = Command::new("yt-dlp")
+            .args([
+                "-o",
+                "-",
+                "--no-part",
+                "-f",
+                format!("bestaudio").as_str(),
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("Could not start yt-dlp process");
+
+        // Connect yt-dlp's stdout to ffmpeg's stdin
+        let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
+
+        let mut ffmpeg_process = Command::new("ffmpeg")
+            .args([
+                "-i", "pipe:0", "-vn", // No video
+                "-f", "pulse", // Output to PulseAudio (use "alsa" for ALSA)
+                "default",
+            ])
+            .stdin(Stdio::from(yt_dlp_stdout))
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("Could not start ffmpeg process");
+        let _ = yt_dlp_process.wait();
+        let _ = ffmpeg_process.wait();
+    });
+
     let encode_thread = thread::spawn(move || {
         encoder.encode().expect("Failed to encode frames");
     });
@@ -133,4 +165,5 @@ fn main() {
     // Wait for threads to finish
     let _ = encode_thread.join();
     let _ = display_thread.join();
+    let _ = audio_thread.join();
 }
