@@ -29,8 +29,7 @@ impl Encoder {
         streaming_done_rx: mpsc::Receiver<()>,
         encoding_done_tx: mpsc::Sender<()>,
     ) -> Res<Self> {
-        let (term_width, term_height) =
-            Self::get_terminal_size().expect("Failed to get terminal size");
+        let (term_width, term_height) = Self::get_terminal_size().unwrap_or((1280, 720));
 
         if term_width == 0 || term_height == 0 {
             return Err("Invalid terminal size".into());
