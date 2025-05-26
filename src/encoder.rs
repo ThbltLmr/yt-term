@@ -73,11 +73,17 @@ impl Encoder {
     pub fn encode(&mut self) -> Res<()> {
         loop {
             let mut video_buffer = self.video_buffer.lock().unwrap();
+            let x_offset = (self.term_width as usize - self.width) / 2;
+            let y_offset = (self.term_height as usize - self.height) / 2;
+
             let encoded_control_data = self.encode_control_data(HashMap::from([
                 ("f".into(), "24".into()),
                 ("s".into(), format!("{}", self.width).into()),
                 ("v".into(), format!("{}", self.height).into()),
                 ("t".into(), "d".into()),
+                ("a".into(), "T".into()),
+                ("X".into(), format!("{}", x_offset).into()),
+                ("Y".into(), format!("{}", y_offset).into()),
                 ("a".into(), "T".into()),
             ]));
 

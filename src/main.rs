@@ -44,7 +44,8 @@ fn main() {
         height,
         streaming_done_rx,
         encoding_done_tx,
-    );
+    )
+    .expect("Failed to create encoder");
 
     let display_manager =
         display_manager::DisplayManager::new(Arc::clone(&encoded_buffer), encoding_done_rx);
