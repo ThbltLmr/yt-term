@@ -34,6 +34,7 @@ fn main() {
     let video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
     let encoded_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
 
+    let (display_started_tx, display_started_rx) = mpsc::channel::<()>();
     let (streaming_done_tx, streaming_done_rx) = mpsc::channel::<()>();
     let (encoding_done_tx, encoding_done_rx) = mpsc::channel::<()>();
 
@@ -47,8 +48,11 @@ fn main() {
     )
     .expect("Failed to create encoder");
 
-    let display_manager =
-        display_manager::DisplayManager::new(Arc::clone(&encoded_buffer), encoding_done_rx);
+    let display_manager = display_manager::DisplayManager::new(
+        Arc::clone(&encoded_buffer),
+        encoding_done_rx,
+        display_started_tx,
+    );
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
@@ -103,6 +107,10 @@ fn main() {
 
         // Connect yt-dlp's stdout to ffmpeg's stdin
         let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
+
+        while !display_started_rx.try_recv().is_ok() {
+            thread::sleep(std::time::Duration::from_millis(100));
+        }
 
         let mut ffmpeg_process = Command::new("ffmpeg")
             .args([

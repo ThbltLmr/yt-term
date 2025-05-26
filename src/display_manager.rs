@@ -8,16 +8,19 @@ use crate::{Arc, Mutex};
 pub struct DisplayManager {
     encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     encoding_done_rx: mpsc::Receiver<()>,
+    display_started_tx: mpsc::Sender<()>,
 }
 
 impl DisplayManager {
     pub fn new(
         encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         encoding_done_rx: mpsc::Receiver<()>,
+        display_started_tx: mpsc::Sender<()>,
     ) -> Self {
         DisplayManager {
             encoded_buffer,
             encoding_done_rx,
+            display_started_tx,
         }
     }
 
@@ -42,6 +45,7 @@ impl DisplayManager {
 
     pub fn display(&self) -> Res<()> {
         let now = std::time::Instant::now();
+        let msg_sent = false;
 
         loop {
             if self.encoded_buffer.lock().unwrap().len() == 0 {
@@ -50,6 +54,10 @@ impl DisplayManager {
                 }
                 std::thread::sleep(std::time::Duration::from_secs(3));
             } else {
+                if !msg_sent {
+                    self.display_started_tx.send(()).unwrap();
+                }
+
                 let encoded_frame = self.encoded_buffer.lock().unwrap().get_frame();
                 if let Some(frame) = encoded_frame {
                     if std::time::Instant::now().duration_since(now).as_millis()
