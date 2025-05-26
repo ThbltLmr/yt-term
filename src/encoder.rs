@@ -3,6 +3,7 @@ use crate::{
     ring_buffer::{Frame, RingBuffer},
 };
 use base64::{engine::general_purpose, Engine as _};
+use std::mem;
 use std::{
     collections::HashMap,
     sync::{mpsc, Arc, Mutex},
@@ -13,6 +14,8 @@ pub struct Encoder {
     encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     width: usize,
     height: usize,
+    term_width: u16,
+    term_height: u16,
     streaming_done_rx: mpsc::Receiver<()>,
     encoding_done_tx: mpsc::Sender<()>,
 }
@@ -26,11 +29,15 @@ impl Encoder {
         streaming_done_rx: mpsc::Receiver<()>,
         encoding_done_tx: mpsc::Sender<()>,
     ) -> Self {
+        let (term_width, term_height) =
+            Self::get_terminal_size().expect("Failed to get terminal size");
         Encoder {
             video_buffer,
             encoded_buffer,
             width,
             height,
+            term_width,
+            term_height,
             streaming_done_rx,
             encoding_done_tx,
         }
@@ -97,6 +104,17 @@ impl Encoder {
     fn encode_rbg(&self, rgb: Vec<u8>) -> Vec<u8> {
         let encoded = general_purpose::STANDARD.encode(&rgb);
         encoded.as_bytes().to_vec()
+    }
+    fn get_terminal_size() -> std::io::Result<(u16, u16)> {
+        let mut winsize: libc::winsize = unsafe { mem::zeroed() };
+
+        let result = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) };
+
+        if result == -1 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        Ok((winsize.ws_xpixel, winsize.ws_ypixel))
     }
 }
 
