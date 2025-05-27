@@ -6,9 +6,9 @@ use std::{
 };
 
 use args::Args;
-use clap::Parser;
 use encoder::Encoder;
 use ring_buffer::{Frame, RingBuffer};
+use screen_guard::ScreenGuard;
 
 mod args;
 mod display_manager;
@@ -18,7 +18,7 @@ mod ring_buffer;
 mod screen_guard;
 
 fn main() {
-    let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
+    let _screen_guard = ScreenGuard::new().expect("Failed to create screen guard");
 
     let Args {
         url,
@@ -67,7 +67,6 @@ fn main() {
         .spawn()
         .expect("Could not start yt-dlp process");
 
-    // Connect yt-dlp's stdout to ffmpeg's stdin
     let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
 
     let mut ffmpeg_process = Command::new("ffmpeg")
@@ -87,7 +86,8 @@ fn main() {
     let mut accumulated_data = Vec::new();
 
     // 32KB chunks, chunks that yt-dlp outputs
-    let mut read_buffer = vec![0u8; 32768];
+    let yt_dlp_chunk_size = 32768;
+    let mut read_buffer = vec![0u8; yt_dlp_chunk_size];
 
     let audio_thread = thread::spawn(move || {
         let mut yt_dlp_process = Command::new("yt-dlp")
@@ -104,7 +104,6 @@ fn main() {
             .spawn()
             .expect("Could not start yt-dlp process");
 
-        // Connect yt-dlp's stdout to ffmpeg's stdin
         let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
 
         while !display_started_rx.try_recv().is_ok() {
@@ -112,15 +111,12 @@ fn main() {
         }
 
         let mut ffmpeg_process = Command::new("ffmpeg")
-            .args([
-                "-i", "pipe:0", "-vn", // No video
-                "-f", "pulse", // Output to PulseAudio (use "alsa" for ALSA)
-                "default",
-            ])
+            .args(["-i", "pipe:0", "-vn", "-f", "pulse", "default"])
             .stdin(Stdio::from(yt_dlp_stdout))
             .stderr(Stdio::null())
             .spawn()
             .expect("Could not start ffmpeg process");
+
         let _ = yt_dlp_process.wait();
         let _ = ffmpeg_process.wait();
     });
@@ -133,7 +129,6 @@ fn main() {
         display_manager.display().expect("Failed to display frames");
     });
 
-    // Read frames from ffmpeg and store them in the video buffer
     loop {
         match ffmpeg_stdout.read(&mut read_buffer) {
             Ok(0) => {
@@ -143,7 +138,6 @@ fn main() {
             Ok(bytes_read) => {
                 accumulated_data.extend_from_slice(&read_buffer[0..bytes_read]);
 
-                // Process complete frames
                 while accumulated_data.len() >= frame_size {
                     let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
                     let frame = Frame::new(frame_data, timestamp);
@@ -160,7 +154,6 @@ fn main() {
         }
     }
 
-    // If we have any leftover data that's not a complete frame
     if !accumulated_data.is_empty() {
         println!("Leftover incomplete data: {} bytes", accumulated_data.len());
     }
