@@ -10,14 +10,14 @@ use crate::{Arc, Mutex};
 
 pub struct AudioAdapter {
     simple: Simple,
-    sample_interval: u64,
+    sample_interval: usize,
     audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
     audio_queueing_done_rx: mpsc::Receiver<()>,
 }
 
 impl AudioAdapter {
     pub fn new(
-        sample_interval: u64,
+        sample_interval: usize,
         audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
         audio_queueing_done_rx: mpsc::Receiver<()>,
     ) -> Res<Self> {
@@ -63,8 +63,8 @@ impl AudioAdapter {
             } else {
                 let audio_sample = self.audio_buffer.lock().unwrap().get_el();
                 if let Some(sample) = audio_sample {
-                    if std::time::Instant::now().duration_since(now).as_millis()
-                        >= self.sample_interval as u128
+                    if std::time::Instant::now().duration_since(now).as_secs()
+                        >= self.sample_interval as u64
                     {
                         self.play_sample(sample)?;
                     }

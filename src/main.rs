@@ -22,10 +22,12 @@ use std::{
 
 use helpers::{
     args::{parse_args, Args},
-    structs::{Frame, RingBuffer, Sample},
+    structs::{Frame, RingBuffer, Sample, ScreenGuard},
 };
 
 fn main() {
+    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+
     let Args {
         url,
         width,
@@ -88,11 +90,10 @@ fn main() {
     });
 
     let ready_audio_buffer = Arc::new(Mutex::new(RingBuffer::<Sample>::new(1)));
-    let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(24)));
+    let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(fps)));
 
-    // TODO: create threads to handle sending encoded frames to the client and audio to pulse
     let audio_adapter =
-        audio::adapter::AudioAdapter::new(1, audio_buffer.clone(), audio_queueing_done_rx)
+        audio::adapter::AudioAdapter::new(1, ready_audio_buffer.clone(), audio_queueing_done_rx)
             .expect("Failed to create audio adapter");
 
     thread::spawn(move || {
@@ -102,8 +103,8 @@ fn main() {
     });
 
     let video_adapter = video::adapter::TerminalAdapter::new(
-        24,
-        encoded_video_buffer.clone(),
+        1000 / fps,
+        ready_video_buffer.clone(),
         video_queueing_done_rx,
     )
     .expect("Failed to create video adapter");
@@ -142,12 +143,6 @@ fn main() {
                 .lock()
                 .unwrap()
                 .queue_one_second_into(ready_video_buffer.clone());
-
-            println!(
-                "Ready audio buffer size: {}, Ready video buffer size: {}",
-                ready_audio_buffer.lock().unwrap().len(),
-                ready_video_buffer.lock().unwrap().len()
-            );
         } else {
             thread::sleep(std::time::Duration::from_millis(100));
         }

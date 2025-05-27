@@ -6,14 +6,14 @@ use crate::helpers::types::Res;
 use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
-    frame_interval: u64,
+    frame_interval: usize,
     encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     video_queueing_done_rx: mpsc::Receiver<()>,
 }
 
 impl TerminalAdapter {
     pub fn new(
-        frame_interval: u64,
+        frame_interval: usize,
         encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         video_queueing_done_rx: mpsc::Receiver<()>,
     ) -> Res<Self> {
