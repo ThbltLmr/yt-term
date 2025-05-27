@@ -19,3 +19,7 @@ pub struct Args {
     #[clap(long, default_value = "25")]
     pub fps: usize,
 }
+
+pub fn parse_args() -> Args {
+    Args::parse()
+}

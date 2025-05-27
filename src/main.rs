@@ -20,13 +20,12 @@ mod screen_guard;
 fn main() {
     let _screen_guard = screen_guard::ScreenGuard::new().expect("Failed to create screen guard");
 
-    let args = Args::parse();
     let Args {
         url,
         width,
         height,
         fps,
-    } = args;
+    } = args::parse_args();
 
     let frame_size = width * height * 3;
     let interval = 1000 / fps;
