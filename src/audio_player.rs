@@ -1,7 +1,6 @@
 use std::{
     process::{Command, Stdio},
     sync::mpsc,
-    thread,
 };
 
 use crate::result::Res;
@@ -36,9 +35,9 @@ impl AudioPlayer {
 
         let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
 
-        while !self.display_started_rx.try_recv().is_ok() {
-            thread::sleep(std::time::Duration::from_millis(100));
-        }
+        self.display_started_rx
+            .recv()
+            .expect("Failed to receive display started signal");
 
         let mut ffmpeg_process = Command::new("ffmpeg")
             .args(["-i", "pipe:0", "-vn", "-f", "pulse", "default"])
