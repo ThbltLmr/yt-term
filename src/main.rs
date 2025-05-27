@@ -6,12 +6,14 @@ use std::{
 };
 
 use args::Args;
+use audio_player::AudioPlayer;
 use display_manager::DisplayManager;
 use encoder::Encoder;
 use ring_buffer::{Frame, RingBuffer};
 use screen_guard::ScreenGuard;
 
 mod args;
+mod audio_player;
 mod display_manager;
 mod encoder;
 mod result;
@@ -55,6 +57,21 @@ fn main() {
     )
     .expect("Failed to create display manager");
 
+    let audio_player = AudioPlayer::new(display_started_rx, url.clone())
+        .expect("Failed to create display manager");
+
+    let audio_thread = thread::spawn(move || {
+        audio_player.play();
+    });
+
+    let encode_thread = thread::spawn(move || {
+        encoder.encode().expect("Failed to encode frames");
+    });
+
+    let display_thread = thread::spawn(move || {
+        display_manager.display().expect("Failed to display frames");
+    });
+
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
             "-o",
@@ -90,46 +107,6 @@ fn main() {
     // 32KB chunks, chunks that yt-dlp outputs
     let yt_dlp_chunk_size = 32768;
     let mut read_buffer = vec![0u8; yt_dlp_chunk_size];
-
-    let audio_thread = thread::spawn(move || {
-        let mut yt_dlp_process = Command::new("yt-dlp")
-            .args([
-                "-o",
-                "-",
-                "--no-part",
-                "-f",
-                format!("bestaudio").as_str(),
-                &url,
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("Could not start yt-dlp process");
-
-        let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
-
-        while !display_started_rx.try_recv().is_ok() {
-            thread::sleep(std::time::Duration::from_millis(100));
-        }
-
-        let mut ffmpeg_process = Command::new("ffmpeg")
-            .args(["-i", "pipe:0", "-vn", "-f", "pulse", "default"])
-            .stdin(Stdio::from(yt_dlp_stdout))
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("Could not start ffmpeg process");
-
-        let _ = yt_dlp_process.wait();
-        let _ = ffmpeg_process.wait();
-    });
-
-    let encode_thread = thread::spawn(move || {
-        encoder.encode().expect("Failed to encode frames");
-    });
-
-    let display_thread = thread::spawn(move || {
-        display_manager.display().expect("Failed to display frames");
-    });
 
     loop {
         match ffmpeg_stdout.read(&mut read_buffer) {

@@ -82,7 +82,7 @@ mod tests {
     fn test_display_manager() {
         let (tx, rx) = mpsc::channel();
         let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
-        let display_manager = DisplayManager::new(encoded_buffer.clone(), rx, tx.clone());
+        let display_manager = DisplayManager::new(encoded_buffer.clone(), rx, tx.clone()).unwrap();
 
         let frame = Frame {
             data: vec![1, 2, 3],
