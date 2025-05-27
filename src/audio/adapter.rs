@@ -82,8 +82,8 @@ mod tests {
     #[test]
     fn test_display_manager() {
         let (tx, rx) = mpsc::channel();
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(25)));
-        let display_manager = AudioAdapter::new(25, encoded_buffer.clone(), rx).unwrap();
+        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
+        let display_manager = AudioAdapter::new(30, encoded_buffer.clone(), rx).unwrap();
 
         let sample = Sample {
             data: vec![1, 2, 3],
