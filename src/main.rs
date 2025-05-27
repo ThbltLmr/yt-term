@@ -1,6 +1,4 @@
 use std::{
-    io::Read,
-    process::{Command, Stdio},
     sync::{mpsc, Arc, Mutex},
     thread,
 };
@@ -17,6 +15,7 @@ mod audio_player;
 mod display_manager;
 mod encoder;
 mod result;
+mod rgb_streamer;
 mod ring_buffer;
 mod screen_guard;
 
@@ -29,9 +28,6 @@ fn main() {
         height,
         fps,
     } = args::parse_args();
-
-    let frame_size = width * height * 3;
-    let interval = 1000 / fps;
 
     let rgb_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
     let encoded_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
@@ -50,12 +46,20 @@ fn main() {
     )
     .expect("Failed to create encoder");
 
+    let encode_thread = thread::spawn(move || {
+        encoder.encode().expect("Failed to encode frames");
+    });
+
     let display_manager = DisplayManager::new(
         Arc::clone(&encoded_buffer),
         encoding_done_rx,
         display_started_tx,
     )
     .expect("Failed to create display manager");
+
+    let display_thread = thread::spawn(move || {
+        display_manager.display().expect("Failed to display frames");
+    });
 
     let audio_player = AudioPlayer::new(display_started_rx, url.clone())
         .expect("Failed to create display manager");
@@ -64,82 +68,17 @@ fn main() {
         audio_player.play();
     });
 
-    let encode_thread = thread::spawn(move || {
-        encoder.encode().expect("Failed to encode frames");
-    });
+    let rgb_streamer = rgb_streamer::RGBStreamer::new(
+        Arc::clone(&rgb_buffer),
+        streaming_done_tx,
+        url.clone(),
+        width,
+        height,
+        fps,
+    )
+    .unwrap();
 
-    let display_thread = thread::spawn(move || {
-        display_manager.display().expect("Failed to display frames");
-    });
-
-    let mut yt_dlp_process = Command::new("yt-dlp")
-        .args([
-            "-o",
-            "-",
-            "--no-part",
-            "-f",
-            format!("bestvideo[height={height}][width={width}]").as_str(),
-            &url,
-        ])
-        .stderr(Stdio::null())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Could not start yt-dlp process");
-
-    let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
-
-    let mut ffmpeg_process = Command::new("ffmpeg")
-        .args(["-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
-        .stdin(Stdio::from(yt_dlp_stdout))
-        .stderr(Stdio::null())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Could not start ffmpeg process");
-
-    let mut ffmpeg_stdout = ffmpeg_process
-        .stdout
-        .take()
-        .expect("Failed to get ffmpeg stdout");
-
-    let mut timestamp = 0;
-    let mut accumulated_data = Vec::new();
-
-    // 32KB chunks, chunks that yt-dlp outputs
-    let yt_dlp_chunk_size = 32768;
-    let mut read_buffer = vec![0u8; yt_dlp_chunk_size];
-
-    loop {
-        match ffmpeg_stdout.read(&mut read_buffer) {
-            Ok(0) => {
-                streaming_done_tx.send(()).unwrap();
-                break;
-            }
-            Ok(bytes_read) => {
-                accumulated_data.extend_from_slice(&read_buffer[0..bytes_read]);
-
-                while accumulated_data.len() >= frame_size {
-                    let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
-                    let frame = Frame::new(frame_data, timestamp);
-
-                    rgb_buffer.lock().unwrap().push_frame(frame);
-
-                    timestamp += interval as u64;
-                }
-            }
-            Err(e) => {
-                eprintln!("Error reading from ffmpeg: {}", e);
-                break;
-            }
-        }
-    }
-
-    if !accumulated_data.is_empty() {
-        println!("Leftover incomplete data: {} bytes", accumulated_data.len());
-    }
-
-    // Wait for processes to complete
-    let _ = ffmpeg_process.wait();
-    let _ = yt_dlp_process.wait();
+    rgb_streamer.start_streaming();
 
     // Wait for threads to finish
     let _ = encode_thread.join();
