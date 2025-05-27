@@ -15,9 +15,6 @@ pub struct Args {
 
     #[clap(long, default_value = "360")]
     pub height: usize,
-
-    #[clap(long, default_value = "30")]
-    pub fps: usize,
 }
 
 pub fn parse_args() -> Args {

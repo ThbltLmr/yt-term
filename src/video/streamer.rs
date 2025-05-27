@@ -15,7 +15,6 @@ pub struct VideoStreamer {
     url: String,
     width: usize,
     height: usize,
-    fps: usize,
 }
 
 impl VideoStreamer {
@@ -25,7 +24,6 @@ impl VideoStreamer {
         url: String,
         width: usize,
         height: usize,
-        fps: usize,
     ) -> Res<Self> {
         Ok(VideoStreamer {
             rgb_buffer,
@@ -33,7 +31,6 @@ impl VideoStreamer {
             url,
             width,
             height,
-            fps,
         })
     }
 

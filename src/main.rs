@@ -28,15 +28,10 @@ use helpers::{
 fn main() {
     let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
-    let Args {
-        url,
-        width,
-        height,
-        fps,
-    } = parse_args();
+    let Args { url, width, height } = parse_args();
 
-    let raw_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(fps)));
-    let encoded_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(fps)));
+    let raw_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(25)));
+    let encoded_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(25)));
     let audio_buffer = Arc::new(Mutex::new(RingBuffer::<Sample>::new(1)));
 
     let (audio_streaming_done_tx, audio_streaming_done_rx) = std::sync::mpsc::channel();
@@ -65,7 +60,6 @@ fn main() {
         url.clone(),
         width,
         height,
-        fps,
     )
     .expect("Failed to create video streamer");
 
@@ -90,7 +84,7 @@ fn main() {
     });
 
     let ready_audio_buffer = Arc::new(Mutex::new(RingBuffer::<Sample>::new(1)));
-    let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(fps)));
+    let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(25)));
 
     let audio_adapter =
         audio::adapter::AudioAdapter::new(1, ready_audio_buffer.clone(), audio_queueing_done_rx)
@@ -103,7 +97,7 @@ fn main() {
     });
 
     let video_adapter = video::adapter::TerminalAdapter::new(
-        1000 / fps,
+        1000 / 25,
         ready_video_buffer.clone(),
         video_queueing_done_rx,
     )
