@@ -31,26 +31,30 @@ impl Sample {
 }
 
 pub struct RingBuffer<T> {
-    frames: VecDeque<T>,
+    elements: VecDeque<T>,
 }
 
 impl<T> RingBuffer<T> {
     pub fn new() -> Self {
         RingBuffer {
-            frames: VecDeque::new(),
+            elements: VecDeque::new(),
         }
     }
 
-    pub fn push_frame(&mut self, frame: T) {
-        self.frames.push_back(frame);
+    pub fn push_el(&mut self, element: T) {
+        self.elements.push_back(element);
     }
 
-    pub fn get_frame(&mut self) -> Option<T> {
-        self.frames.pop_front()
+    pub fn get_el(&mut self) -> Option<T> {
+        self.elements.pop_front()
     }
 
     pub fn len(&self) -> usize {
-        self.frames.len()
+        self.elements.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.elements.is_empty()
     }
 }
 
@@ -96,12 +100,12 @@ mod tests {
         let frame1 = Frame::new(vec![1, 2, 3], 123456789);
         let frame2 = Frame::new(vec![4, 5, 6], 987654321);
 
-        buffer.push_frame(frame1);
-        buffer.push_frame(frame2);
+        buffer.push_el(frame1);
+        buffer.push_el(frame2);
 
         assert_eq!(buffer.len(), 2);
 
-        let retrieved_frame = buffer.get_frame().unwrap();
+        let retrieved_frame = buffer.get_el().unwrap();
         assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
         assert_eq!(retrieved_frame.timestamp, 123456789);
 
