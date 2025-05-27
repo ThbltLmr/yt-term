@@ -5,28 +5,21 @@ use super::types::Res;
 
 pub struct Frame {
     pub data: Vec<u8>,
-    pub timestamp: u64,
 }
 
 impl Frame {
-    pub fn new(data: Vec<u8>, timestamp: u64) -> Self {
-        Frame { data, timestamp }
+    pub fn new(data: Vec<u8>) -> Self {
+        Frame { data }
     }
 }
 
 pub struct Sample {
     pub data: Vec<u8>,
-    pub start_timestamp: u64,
-    pub end_timestamp: u64,
 }
 
 impl Sample {
-    pub fn new(data: Vec<u8>, start_timestamp: u64, end_timestamp: u64) -> Self {
-        Sample {
-            data,
-            start_timestamp,
-            end_timestamp,
-        }
+    pub fn new(data: Vec<u8>) -> Self {
+        Sample { data }
     }
 }
 
@@ -97,8 +90,8 @@ mod tests {
         let mut buffer = RingBuffer::new();
         assert_eq!(buffer.len(), 0);
 
-        let frame1 = Frame::new(vec![1, 2, 3], 123456789);
-        let frame2 = Frame::new(vec![4, 5, 6], 987654321);
+        let frame1 = Frame::new(vec![1, 2, 3]);
+        let frame2 = Frame::new(vec![4, 5, 6]);
 
         buffer.push_el(frame1);
         buffer.push_el(frame2);
@@ -107,7 +100,6 @@ mod tests {
 
         let retrieved_frame = buffer.get_el().unwrap();
         assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
-        assert_eq!(retrieved_frame.timestamp, 123456789);
 
         assert_eq!(buffer.len(), 1);
     }
