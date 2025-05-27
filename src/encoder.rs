@@ -10,7 +10,7 @@ use std::{
 };
 
 pub struct Encoder {
-    video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     width: usize,
     height: usize,
@@ -22,7 +22,7 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new(
-        video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+        rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         width: usize,
         height: usize,
@@ -40,7 +40,7 @@ impl Encoder {
         }
 
         Ok(Encoder {
-            video_buffer,
+            rgb_buffer,
             encoded_buffer,
             width,
             height,
@@ -54,7 +54,7 @@ impl Encoder {
     // Convert a frame to the Kitty Graphics Protocol format
     fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
         // Base64 encode the frame data
-        let encoded_payload = self.encode_rbg(frame.data);
+        let encoded_payload = self.encode_rgb(frame.data);
         let prefix = b"\x1b_G";
         let suffix = b"\x1b\\";
         let delimiter = b";";
@@ -71,7 +71,7 @@ impl Encoder {
 
     pub fn encode(&mut self) -> Res<()> {
         loop {
-            let mut video_buffer = self.video_buffer.lock().unwrap();
+            let mut rgb_buffer = self.rgb_buffer.lock().unwrap();
             let x_offset = (self.term_width as usize - self.width) / 2;
             let y_offset = (self.term_height as usize - self.height) / 2;
 
@@ -86,7 +86,7 @@ impl Encoder {
                 ("a".into(), "T".into()),
             ]));
 
-            let frame = video_buffer.get_frame();
+            let frame = rgb_buffer.get_frame();
 
             if let Some(frame) = frame {
                 let encoded_frame = self.encode_frame(encoded_control_data, frame);
@@ -111,7 +111,7 @@ impl Encoder {
         encoded_data.join(",").as_bytes().to_vec()
     }
 
-    fn encode_rbg(&self, rgb: Vec<u8>) -> Vec<u8> {
+    fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
         let encoded = general_purpose::STANDARD.encode(&rgb);
         encoded.as_bytes().to_vec()
     }
@@ -139,13 +139,13 @@ mod tests {
 
     #[test]
     fn test_new_encoder() {
-        let video_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new()));
         let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
         let encoder = Encoder::new(
-            video_buffer.clone(),
+            rgb_buffer.clone(),
             encoded_buffer.clone(),
             640,
             480,
@@ -191,13 +191,13 @@ mod tests {
 
     #[test]
     fn test_encode_frame() {
-        let video_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new()));
         let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
         let (streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
         let mut encoder = Encoder::new(
-            video_buffer.clone(),
+            rgb_buffer.clone(),
             encoded_buffer.clone(),
             640,
             480,
@@ -207,7 +207,7 @@ mod tests {
         .unwrap();
 
         let test_frame = Frame::new(vec![0; 640 * 480 * 3], 0);
-        video_buffer.lock().unwrap().push_frame(test_frame);
+        rgb_buffer.lock().unwrap().push_frame(test_frame);
 
         thread::spawn(move || {
             encoder.encode().unwrap();
@@ -221,13 +221,13 @@ mod tests {
 
     #[test]
     fn test_get_terminal_size() {
-        let video_buffer = Arc::new(Mutex::new(RingBuffer::new()));
+        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new()));
         let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new()));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
         let encoder = Encoder::new(
-            video_buffer.clone(),
+            rgb_buffer.clone(),
             encoded_buffer.clone(),
             640,
             480,

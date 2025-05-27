@@ -31,7 +31,7 @@ fn main() {
     let frame_size = width * height * 3;
     let interval = 1000 / fps;
 
-    let video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
+    let rgb_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
     let encoded_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new()));
 
     let (display_started_tx, display_started_rx) = mpsc::channel::<()>();
@@ -39,7 +39,7 @@ fn main() {
     let (encoding_done_tx, encoding_done_rx) = mpsc::channel::<()>();
 
     let mut encoder = Encoder::new(
-        Arc::clone(&video_buffer),
+        Arc::clone(&rgb_buffer),
         Arc::clone(&encoded_buffer),
         width,
         height,
@@ -144,7 +144,7 @@ fn main() {
                     let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
                     let frame = Frame::new(frame_data, timestamp);
 
-                    video_buffer.lock().unwrap().push_frame(frame);
+                    rgb_buffer.lock().unwrap().push_frame(frame);
 
                     timestamp += interval as u64;
                 }
