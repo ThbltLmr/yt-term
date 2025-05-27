@@ -51,7 +51,6 @@ impl TerminalAdapter {
                 if self.video_queueing_done_rx.try_recv().is_ok() {
                     return Ok(());
                 }
-                std::thread::sleep(std::time::Duration::from_millis(100));
             } else {
                 let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
                 if let Some(frame) = encoded_frame {
