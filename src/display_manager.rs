@@ -16,12 +16,12 @@ impl DisplayManager {
         encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
         encoding_done_rx: mpsc::Receiver<()>,
         display_started_tx: mpsc::Sender<()>,
-    ) -> Self {
-        DisplayManager {
+    ) -> Res<Self> {
+        Ok(DisplayManager {
             encoded_buffer,
             encoding_done_rx,
             display_started_tx,
-        }
+        })
     }
 
     fn display_frame(&self, frame: Frame) -> Res<()> {

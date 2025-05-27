@@ -6,6 +6,7 @@ use std::{
 };
 
 use args::Args;
+use display_manager::DisplayManager;
 use encoder::Encoder;
 use ring_buffer::{Frame, RingBuffer};
 use screen_guard::ScreenGuard;
@@ -47,11 +48,12 @@ fn main() {
     )
     .expect("Failed to create encoder");
 
-    let display_manager = display_manager::DisplayManager::new(
+    let display_manager = DisplayManager::new(
         Arc::clone(&encoded_buffer),
         encoding_done_rx,
         display_started_tx,
-    );
+    )
+    .expect("Failed to create display manager");
 
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
