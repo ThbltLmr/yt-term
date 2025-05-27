@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::io::Write;
+use std::sync::{Arc, Mutex};
 
 use super::types::Res;
 
@@ -25,17 +26,47 @@ impl Sample {
 
 pub struct RingBuffer<T> {
     elements: VecDeque<T>,
+    el_per_second: usize,
 }
 
 impl<T> RingBuffer<T> {
-    pub fn new() -> Self {
+    pub fn new(el_per_second: usize) -> Self {
         RingBuffer {
             elements: VecDeque::new(),
+            el_per_second,
         }
+    }
+
+    pub fn has_one_second_ready(&self) -> bool {
+        self.elements.len() >= self.el_per_second
+    }
+
+    pub fn queue_one_second_into(&mut self, queue: Arc<Mutex<RingBuffer<T>>>) {
+        let mut queue = queue.lock().unwrap();
+        let elements = self.pop_one_second();
+        queue.push_elements(elements);
     }
 
     pub fn push_el(&mut self, element: T) {
         self.elements.push_back(element);
+    }
+
+    fn push_elements(&mut self, elements: Vec<T>) {
+        for element in elements {
+            self.elements.push_back(element);
+        }
+    }
+
+    pub fn pop_one_second(&mut self) -> Vec<T> {
+        let mut elements = Vec::new();
+        for _ in 0..self.el_per_second {
+            if let Some(el) = self.elements.pop_front() {
+                elements.push(el);
+            } else {
+                break;
+            }
+        }
+        elements
     }
 
     pub fn get_el(&mut self) -> Option<T> {
@@ -87,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_ring_buffer() {
-        let mut buffer = RingBuffer::new();
+        let mut buffer = RingBuffer::new(1);
         assert_eq!(buffer.len(), 0);
 
         let frame1 = Frame::new(vec![1, 2, 3]);
