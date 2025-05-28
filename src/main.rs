@@ -87,7 +87,7 @@ fn main() {
     let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::<Frame>::new(25)));
 
     let audio_adapter =
-        audio::adapter::AudioAdapter::new(1, ready_audio_buffer.clone(), audio_queueing_done_rx)
+        audio::adapter::AudioAdapter::new(1000, ready_audio_buffer.clone(), audio_queueing_done_rx)
             .expect("Failed to create audio adapter");
 
     thread::spawn(move || {

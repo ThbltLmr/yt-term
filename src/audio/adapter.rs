@@ -3,6 +3,7 @@ use pulse::stream::Direction;
 use simple_pulse::Simple;
 
 use std::sync::mpsc;
+use std::time::Duration;
 
 use crate::helpers::structs::{RingBuffer, Sample};
 use crate::helpers::types::Res;
@@ -10,14 +11,14 @@ use crate::{Arc, Mutex};
 
 pub struct AudioAdapter {
     simple: Simple,
-    sample_interval: usize,
+    sample_interval: Duration,
     audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
     audio_queueing_done_rx: mpsc::Receiver<()>,
 }
 
 impl AudioAdapter {
     pub fn new(
-        sample_interval: usize,
+        sample_interval_ms: usize,
         audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
         audio_queueing_done_rx: mpsc::Receiver<()>,
     ) -> Res<Self> {
@@ -40,7 +41,7 @@ impl AudioAdapter {
 
         Ok(AudioAdapter {
             simple,
-            sample_interval,
+            sample_interval: Duration::from_millis(sample_interval_ms as u64),
             audio_buffer,
             audio_queueing_done_rx,
         })
@@ -52,20 +53,18 @@ impl AudioAdapter {
     }
 
     pub fn play(&self) -> Res<()> {
-        let now = std::time::Instant::now();
+        let mut last_sample_time = std::time::Instant::now();
 
         loop {
             if self.audio_buffer.lock().unwrap().len() == 0 {
                 if self.audio_queueing_done_rx.try_recv().is_ok() {
                     return Ok(());
                 }
-                std::thread::sleep(std::time::Duration::from_millis(100));
             } else {
-                let audio_sample = self.audio_buffer.lock().unwrap().get_el();
-                if let Some(sample) = audio_sample {
-                    if std::time::Instant::now().duration_since(now).as_secs()
-                        >= self.sample_interval as u64
-                    {
+                if last_sample_time.elapsed() >= self.sample_interval {
+                    let audio_sample = self.audio_buffer.lock().unwrap().get_el();
+                    if let Some(sample) = audio_sample {
+                        last_sample_time = std::time::Instant::now();
                         self.play_sample(sample)?;
                     }
                 }
