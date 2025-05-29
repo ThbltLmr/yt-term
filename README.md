@@ -19,3 +19,6 @@ Images can be sent in three different formats: RGB, RGBA, and PNG. They can be s
 <ESC>_G<control_data>;<base64_encoded_image_or_image_path><ESC>\
 ```
 Where the `control_data` is a string of comma-separated key-value pairs that specify the image format, width, height, and other properties. The `base64_encoded_image_or_image_path` is the image data or a path to an image file encoded in base64.
+
+I chose to use the RGB format as it is the most straightfoward to implement. By default, I also chose to use a 640x360 resolution, which is high enough for most videos and low enough to not cause performance issues.
+Finally, the last properties needed in the `control_data` are the action we want to perform (in this case, display the image), and the transmission medium (which indicates where the image is coming from - in this case, the data is directly encoded in the escape code).

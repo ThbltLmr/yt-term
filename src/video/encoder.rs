@@ -81,7 +81,6 @@ impl Encoder {
                 ("a".into(), "T".into()),
                 ("X".into(), format!("{}", x_offset).into()),
                 ("Y".into(), format!("{}", y_offset).into()),
-                ("a".into(), "T".into()),
             ]));
 
             let frame = rgb_buffer.get_el();
