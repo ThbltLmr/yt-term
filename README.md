@@ -41,4 +41,33 @@ To get a stream of RGB frames from a video, we use a combination of `yt-dlp` and
 
 We start `yt-dlp` to extract the video stream, with the right width and height, and set it up to output to `stdout`. We can then pipe it to `ffmpeg`'s `stdin`, which will decode the video and convert it to RGB frames.
 
-We then store these RGB frames in a buffer, from which we can read to encode them to the Kitty graphics protocol.
+We then store these RGB frames in a first buffer, from which we can read to encode them to the Kitty graphics protocol and store them in a second queue.
+
+### Displaying the frames in the terminal
+To display the video frames in the terminal, we need to read from the second queue, and send the encoded frames to the terminal at the right time.
+Most YouTube videos in 360p have a frame rate of 25 FPS, meaning that we need to send a frame every 40 milliseconds.
+
+```rust
+if last_frame_time.elapsed() >= self.frame_interval {
+    let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+    if let Some(frame) = encoded_frame {
+        last_frame_time = std::time::Instant::now();
+        self.display_frame(frame)?;
+    }
+}
+```
+
+Another important aspect is to clear the terminal before each frame. We can achieve this by sending a corresponding escape sequence before each frame.
+
+```rust
+fn display_frame(&self, frame: Frame) -> Res<()> {
+    let mut stdout = io::stdout();
+    let reset_cursor = b"\x1B[H";
+    let mut buffer = vec![];
+    buffer.extend_from_slice(reset_cursor);
+    buffer.extend_from_slice(&frame.data);
+    stdout.write_all(&buffer)?;
+    stdout.flush()?;
+    Ok(())
+}
+```
