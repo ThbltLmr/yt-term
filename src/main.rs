@@ -1,5 +1,6 @@
 mod helpers {
     pub mod args;
+    pub mod logger;
     pub mod structs;
     pub mod types;
 }
@@ -40,6 +41,8 @@ fn main() {
 
     let (audio_queueing_done_tx, audio_queueing_done_rx) = std::sync::mpsc::channel();
     let (video_queueing_done_tx, video_queueing_done_rx) = std::sync::mpsc::channel();
+
+    let (playing_done_tx, playing_done_rx) = std::sync::mpsc::channel();
 
     let audio_streamer = audio::streamer::AudioStreamer::new(
         audio_buffer.clone(),
@@ -109,6 +112,20 @@ fn main() {
             .expect("Failed to start video display");
     });
 
+    let mut logger = helpers::logger::Logger::new(
+        raw_video_buffer.clone(),
+        encoded_video_buffer.clone(),
+        audio_buffer.clone(),
+        ready_video_buffer.clone(),
+        ready_audio_buffer.clone(),
+        playing_done_rx,
+    )
+    .expect("Failed to create logger");
+
+    thread::spawn(move || {
+        logger.log().expect("Failed to start logging");
+    });
+
     loop {
         if audio_streaming_done_rx.try_recv().is_ok()
             && video_encoding_done_rx.try_recv().is_ok()
@@ -121,6 +138,10 @@ fn main() {
             video_queueing_done_tx
                 .send(())
                 .expect("Failed to send audio queueing done signal");
+
+            playing_done_tx
+                .send(())
+                .expect("Failed to send playing done signal");
 
             break;
         }
