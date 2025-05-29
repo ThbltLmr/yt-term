@@ -9,6 +9,7 @@ use super::{
 };
 
 pub struct Logger {
+    start_time: Instant,
     log_file: std::fs::File,
     raw_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
     encoded_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
@@ -29,7 +30,10 @@ impl Logger {
     ) -> Res<Self> {
         let log_file =
             File::create("log.csv").map_err(|e| format!("Failed to create log file: {}", e))?;
+        let start_time = Instant::now();
+
         Ok(Logger {
+            start_time,
             log_file,
             raw_video_buffer,
             encoded_video_buffer,
@@ -53,7 +57,7 @@ impl Logger {
         writeln!(
             self.log_file,
             "{},{},{},{},{},{}",
-            Instant::now().elapsed().as_secs_f64(),
+            self.start_time.elapsed().as_secs_f64(),
             self.raw_video_buffer.lock().unwrap().len(),
             self.encoded_video_buffer.lock().unwrap().len(),
             self.audio_buffer.lock().unwrap().len(),
