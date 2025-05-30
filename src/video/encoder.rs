@@ -75,12 +75,12 @@ impl Encoder {
 
             let encoded_control_data = self.encode_control_data(HashMap::from([
                 ("f".into(), "24".into()),
-                ("s".into(), format!("{}", self.width).into()),
-                ("v".into(), format!("{}", self.height).into()),
+                ("s".into(), format!("{}", self.width)),
+                ("v".into(), format!("{}", self.height)),
                 ("t".into(), "d".into()),
                 ("a".into(), "T".into()),
-                ("X".into(), format!("{}", x_offset).into()),
-                ("Y".into(), format!("{}", y_offset).into()),
+                ("X".into(), format!("{}", x_offset)),
+                ("Y".into(), format!("{}", y_offset)),
             ]));
 
             let frame = rgb_buffer.get_el();
@@ -90,11 +90,9 @@ impl Encoder {
                 let mut encoded_buffer = self.encoded_buffer.lock().unwrap();
 
                 encoded_buffer.push_el(encoded_frame);
-            } else {
-                if self.streaming_done_rx.try_recv().is_ok() {
-                    self.encoding_done_tx.send(()).unwrap();
-                    return Ok(());
-                }
+            } else if self.streaming_done_rx.try_recv().is_ok() {
+                self.encoding_done_tx.send(()).unwrap();
+                return Ok(());
             }
         }
     }

@@ -30,14 +30,7 @@ impl AudioStreamer {
 
     pub fn stream(&self) -> Res<()> {
         let mut yt_dlp_process = Command::new("yt-dlp")
-            .args([
-                "-o",
-                "-",
-                "--no-part",
-                "-f",
-                format!("bestaudio").as_str(),
-                &self.url,
-            ])
+            .args(["-o", "-", "--no-part", "-f", "bestaudio", &self.url])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()

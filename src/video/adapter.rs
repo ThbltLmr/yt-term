@@ -47,23 +47,21 @@ impl TerminalAdapter {
                 if self.video_queueing_done_rx.try_recv().is_ok() {
                     return Ok(());
                 }
-            } else {
-                if last_frame_time.elapsed() >= self.frame_interval {
-                    let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
-                    if let Some(frame) = encoded_frame {
-                        if total_frames_counter > 0
-                            && last_frame_time.elapsed()
-                                > self.frame_interval + Duration::from_millis(2)
-                        {
-                            last_frame_time += self.frame_interval;
-                            total_frames_counter += 1;
-                            continue;
-                        }
-
-                        last_frame_time = std::time::Instant::now();
+            } else if last_frame_time.elapsed() >= self.frame_interval {
+                let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+                if let Some(frame) = encoded_frame {
+                    if total_frames_counter > 0
+                        && last_frame_time.elapsed()
+                            > self.frame_interval + Duration::from_millis(2)
+                    {
+                        last_frame_time += self.frame_interval;
                         total_frames_counter += 1;
-                        self.display_frame(frame)?;
+                        continue;
                     }
+
+                    last_frame_time = std::time::Instant::now();
+                    total_frames_counter += 1;
+                    self.display_frame(frame)?;
                 }
             }
         }

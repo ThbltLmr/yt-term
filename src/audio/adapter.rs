@@ -60,13 +60,11 @@ impl AudioAdapter {
                 if self.audio_queueing_done_rx.try_recv().is_ok() {
                     return Ok(());
                 }
-            } else {
-                if last_sample_time.elapsed() >= self.sample_interval {
-                    let audio_sample = self.audio_buffer.lock().unwrap().get_el();
-                    if let Some(sample) = audio_sample {
-                        last_sample_time = std::time::Instant::now();
-                        self.play_sample(sample)?;
-                    }
+            } else if last_sample_time.elapsed() >= self.sample_interval {
+                let audio_sample = self.audio_buffer.lock().unwrap().get_el();
+                if let Some(sample) = audio_sample {
+                    last_sample_time = std::time::Instant::now();
+                    self.play_sample(sample)?;
                 }
             }
         }

@@ -69,9 +69,9 @@ impl Logger {
     }
 
     pub fn log(&mut self) -> Res<()> {
-        let _ = self.write_header()?;
+        self.write_header()?;
 
-        while let Err(_) = self.playing_done_rx.try_recv() {
+        while self.playing_done_rx.try_recv().is_err() {
             std::thread::sleep(std::time::Duration::from_millis(200));
             self.add_log_entry()?;
         }
