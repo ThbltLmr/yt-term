@@ -7,8 +7,10 @@ You can find a list of supported sites in the [yt-dlp documentation](https://git
 This is a hobby project, meant to be a proof of concept and to try out the Kitty graphics protocol. While I am sure it can be improved in many ways, I am not going to maintain it. Feel free to fork / copy it if you want to use it or improve it.
 
 ## Dependencies
-This program uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) to extract data from video websites, and [ffmpeg](https://www.ffmpeg.org) to pre-encode frames to RGB.
-Please note this also requires a terminal that supports the Kitty graphics protocol, e.g. [Kitty](https://sw.kovidgoyal.net/kitty/), [Ghostty](https://ghostty.org/).
+This program requires:
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) to extract data from video websites
+- [ffmpeg](https://www.ffmpeg.org) to pre-encode frames to RGB
+- a terminal that supports the Kitty graphics protocol, e.g. [Kitty](https://sw.kovidgoyal.net/kitty/), [Ghostty](https://ghostty.org/)
 
 ## Usage
 To run the program, you need to have `yt-dlp` and `ffmpeg` installed on your system.
