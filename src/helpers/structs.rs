@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn test_screen_guard() {
+    fn screen_guard_creation() {
         let guard = ScreenGuard::new();
         assert!(guard.is_ok());
     }

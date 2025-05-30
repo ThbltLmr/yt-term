@@ -76,7 +76,7 @@ mod tests {
     use std::sync::mpsc;
 
     #[test]
-    fn test_display_manager() {
+    fn video_adapter_creation() {
         let (tx, rx) = mpsc::channel();
         let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
         let display_manager = TerminalAdapter::new(30, encoded_buffer.clone(), rx).unwrap();
