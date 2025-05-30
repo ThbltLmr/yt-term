@@ -13,17 +13,31 @@ This program requires:
 - a terminal that supports the Kitty graphics protocol, e.g. [Kitty](https://sw.kovidgoyal.net/kitty/), [Ghostty](https://ghostty.org/)
 
 ## Usage
-To run the program, you need to have `yt-dlp` and `ffmpeg` installed on your system.
-You can then either:
-- Clone the repository and use `cargo`
-- Download the pre-built binary from the [releases page] and run it directly
 
-Example usage:
-
+### Cloning the repository and building with Cargo
 ```bash
+git clone git@github.com:ThbltLmr/yt-term.git  # or use HTTPS or the GitHub CLI
+cd yt-term
 cargo build --release
-./target/release/yt-term --url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
+
+### Downloading the pre-built binary
+You can download the pre-built binary from the [releases page](https://github.com/ThbltLmr/yt-term/releases).
+
+### Running the program
+You can run the program with the following command:
+```bash 
+
+./target/release/yt-term [options] # if using Cargo
+./yt-term [options] # if using the pre-built binary
+```
+
+### Options
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-u`, `--url` | The URL of the video to play | https://www.youtube.com/watch?v=dQw4w9WgXcQ |
+| `-w`, `--width` | The width of the video in pixels | 640 |
+| `-h`, `--height` | The height of the video in pixels | 360 |
 
 ## How it works
 
