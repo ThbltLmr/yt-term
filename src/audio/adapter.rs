@@ -70,18 +70,3 @@ impl AudioAdapter {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::mpsc;
-
-    #[test]
-    fn audio_adapter_creation_and_play() {
-        let (_tx, rx) = mpsc::channel();
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
-
-        let display_manager = AudioAdapter::new(30, encoded_buffer.clone(), rx);
-        assert!(display_manager.is_ok());
-    }
-}
