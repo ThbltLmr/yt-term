@@ -92,7 +92,7 @@ mod tests {
         let audio_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
         let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
         let ready_audio_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
-        let (tx, rx) = mpsc::channel();
+        let (_tx, rx) = mpsc::channel();
 
         let logger = Logger::new(
             raw_video_buffer,
