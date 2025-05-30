@@ -105,3 +105,9 @@ impl Drop for ScreenGuard {
     }
 }
 ```
+
+### Frame rate
+
+### Adding audio
+
+### Synchronizing audio and video with 'ready for display' queues
