@@ -107,6 +107,41 @@ impl Drop for ScreenGuard {
 ```
 
 ### Frame rate
+Since we aim for 25 FPS, we need to ensure that we send a frame every 40 milliseconds. This is done by checking the elapsed time since the last frame was sent and only sending a new frame if enough time has passed.
+
+```rust
+if last_frame_time.elapsed() >= self.frame_interval {
+    let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+    if let Some(frame) = encoded_frame {
+        last_frame_time = std::time::Instant::now();
+        self.display_frame(frame)?;
+    }
+}
+```
+I ran into issues where the frame would take 50-60 ms to display, which would cause the frame rate to drop around 20 FPS. To mitigate this, we can check that the elapsed time since last frame is not too much greater than 40 ms, and if it is, we can skip the frame to avoid lagging behind.
+
+This makes the video playback a bit choppy, but it ensures that we don't fall too far behind the video stream.
+
+
+```rust
+if last_frame_time.elapsed() >= self.frame_interval {
+    let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+    if let Some(frame) = encoded_frame {
+        if total_frames_counter > 0
+            && last_frame_time.elapsed()
+                > self.frame_interval + Duration::from_millis(2) // If there was over 42 ms since the last frame, we skip this frame
+        {
+            last_frame_time += self.frame_interval;
+            total_frames_counter += 1;
+            continue;
+        }
+
+        last_frame_time = std::time::Instant::now();
+        total_frames_counter += 1;
+        self.display_frame(frame)?;
+    }
+}
+```
 
 ### Adding audio
 
