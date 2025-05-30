@@ -79,3 +79,30 @@ impl Logger {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+
+    #[test]
+    fn test_logger_creation() {
+        let raw_video_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
+        let encoded_video_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
+        let audio_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
+        let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
+        let ready_audio_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
+        let (tx, rx) = mpsc::channel();
+
+        let logger = Logger::new(
+            raw_video_buffer,
+            encoded_video_buffer,
+            audio_buffer,
+            ready_video_buffer,
+            ready_audio_buffer,
+            rx,
+        );
+
+        assert!(logger.is_ok());
+    }
+}
