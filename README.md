@@ -144,5 +144,22 @@ if last_frame_time.elapsed() >= self.frame_interval {
 ```
 
 ### Adding audio
+To add audio capabilities, similar to video, we use `yt-dlp` and `ffmpeg`. `yt-dlp` extracts the best audio stream from the given URL, and `ffmpeg` transcodes it into a raw audio format: 16-bit signed little-endian (s16le), 2 channels (stereo), and a 48kHz sample rate. This raw audio data is then streamed into an `audio_buffer`, which is a `RingBuffer<Sample>`.
+
+For playback, we leverage `simple-pulse`, a Rust wrapper for PulseAudio. An `AudioAdapter` is responsible for reading `Sample`s from the `audio_buffer` and playing them through PulseAudio at the appropriate `sample_interval` (which is 1000ms / 48000 samples/sec = 20.83 microseconds per sample, but effectively we process them in chunks).
 
 ### Synchronizing audio and video with 'ready for display' queues
+To ensure that audio and video playback remain synchronized, we introduce a queuing mechanism. Raw video frames are initially stored in `raw_video_buffer` and then encoded video frames (Kitty graphics protocol) are stored in `encoded_video_buffer`. Similarly, raw audio samples are stored in `audio_buffer`.
+
+However, the `AudioAdapter` and `TerminalAdapter` (for video display) do not directly consume from these initial buffers. Instead, we have two intermediary "ready for display" queues: `ready_audio_buffer` and `ready_video_buffer`.
+
+The main loop constantly monitors the `audio_buffer` and `encoded_video_buffer`. It waits until both of these buffers have accumulated at least one second's worth of data. Once this condition is met (checked via `has_one_second_ready()` on the `RingBuffer`s), one second of data is atomically moved from `audio_buffer` into `ready_audio_buffer` and from `encoded_video_buffer` into `ready_video_buffer` (using `queue_one_second_into()`).
+
+Both the `AudioAdapter` and `TerminalAdapter` then read and play/display content from their respective `ready_` buffers. This ensures that audio and video are processed and presented in synchronized one-second chunks, preventing one stream from lagging significantly behind the other.
+
+This strategy allows us to maintain a consistent playback experience, even if there are slight variations in the processing speed of audio and video streams.
+
+### Shutdown and cleanup
+To ensure that resources are properly released and the terminal is reset to its original state, we implement a graceful shutdown mechanism.
+
+This is done by using channels so each thread can signal to downstrean thread that it is done processing. The main thread waits for all threads to finish before exiting.
