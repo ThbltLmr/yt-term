@@ -117,7 +117,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ring_buffer() {
+    fn ring_buffer_push_and_get() {
         let mut buffer = RingBuffer::new(1);
         assert_eq!(buffer.len(), 0);
 
@@ -133,6 +133,32 @@ mod tests {
         assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
 
         assert_eq!(buffer.len(), 1);
+    }
+
+    #[test]
+    fn ring_buffer_pop_one_second() {
+        let mut buffer = RingBuffer::new(2);
+        buffer.push_el(Frame::new(vec![1, 2, 3]));
+        buffer.push_el(Frame::new(vec![4, 5, 6]));
+        buffer.push_el(Frame::new(vec![7, 8, 9]));
+
+        let popped = buffer.pop_one_second();
+        assert_eq!(popped.len(), 2);
+        assert_eq!(popped[0].data, vec![1, 2, 3]);
+        assert_eq!(popped[1].data, vec![4, 5, 6]);
+        assert_eq!(buffer.len(), 1);
+    }
+
+    #[test]
+    fn ring_buffer_has_one_second_ready() {
+        let mut buffer = RingBuffer::new(2);
+        assert!(!buffer.has_one_second_ready());
+
+        buffer.push_el(Frame::new(vec![1, 2, 3]));
+        assert!(!buffer.has_one_second_ready());
+
+        buffer.push_el(Frame::new(vec![4, 5, 6]));
+        assert!(buffer.has_one_second_ready());
     }
 
     #[test]
