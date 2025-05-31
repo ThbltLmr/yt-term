@@ -17,7 +17,7 @@ My initial high-level plan was the following:
 
 ## Getting a stream of RGB frames with yt-dlp and ffmpeg
 
-(Un)surprinsingly, getting the actual video data for a YouTube video is not trivial, leading me to wonder: could it be that YouTube does not want you to watch their content in a different client that they don't make money from? Fortunately, programmers much more talented than myself have already tackled this issue in the `yt-dlp` project. `yt-dlp` lets you download YouTube videos from their url in a variety of formats (with different resolutions, framerates, encoding and so on).
+(Un)surprinsingly, getting the actual video data for a YouTube video is not trivial. Could it be that YouTube does not want you to watch their content in a client that they don't make money from? Fortunately, programmers much more talented than myself have already tackled this issue in the `yt-dlp` project, which lets you download YouTube videos from their url in a variety of formats (with different resolutions, framerates, encoding and so on).
 
 Since YouTube does not have video streams directly in RGB format, we need to convert the data we get from `yt-dlp`. The easiest solution I found to do so was to pipe the `stdout` from `yt-dlp` directly into the `stdin` of `ffmpeg`. The output of `ffmpeg` then becomes a stream of RGB frames, which is exactly what we need.
 
@@ -27,7 +27,7 @@ pub fn stream(&self) -> Res<()> {
     let frame_size = self.width * self.height * 3;
     let mut yt_dlp_process = Command::new("yt-dlp")
         .args([
-            "-o",
+            "-o", // output to stdout
             "-",
             "--no-part",
             "-f",
@@ -86,6 +86,41 @@ pub fn stream(&self) -> Res<()> {
 }
 ```
 I moved this `yt-dlp` -> `ffmpeg` pipeline into its own thread, and save the resulting frames into a buffer so we can encode them to match the Kitty graphics protocol.
+
+## Encoding RBG frames for the Kitty graphics protocol
+
+The Kitty graphics protocol expects the following escape sequence to display an image.
+
+```
+<ESC>_G<control_data>;<payload><ESC>\
+```
+
+Let's break it down:
+
+### Control data
+
+Before sending the terminal some image data, we need to provide it with more information about the image and its properties. That's the role of the control data, which is a series of key-value pairs. You can find a full reference [here](https://sw.kovidgoyal.net/kitty/graphics-protocol/#control-data-reference). For our use case, all we need are the following:
+
+`f=24,s={image width},v={image height},t=d,a=T`
+
+This will tell the terminal to expect RGB data (`f=24`) directly encoded in the payload (`t=d`) and to display it instantly (`a=T`), alongside the image dimensions.
+
+My function to handle control data looks like this: 
+
+```rust
+fn encode_control_data(&self, control_data: HashMap<String, String>) -> Vec<u8> {
+    let mut encoded_data = Vec::new();
+    for (key, value) in control_data {
+        encoded_data.push(format!("{}={}", key, value));
+    }
+
+    encoded_data.join(",").as_bytes().to_vec()
+}
+```
+
+### Payload
+
+The payload itself is simply the RBG data, encoded in base 64:
 
 ---
 - Read about the protocol in Ghostty docs- Missing link: the one part of my usual workflow missing from terminal applications is YouTube
