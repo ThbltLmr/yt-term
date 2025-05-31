@@ -1,6 +1,26 @@
 # Streaming YouTube videos in the terminal with the Kitty graphics protocol
 
+For decades, I have been looking for a blazingly slow, low-quality, feature-poor video player that would let me watch Minecraft Let's play videos and NordVPN ads directly in my terminal.
 
+So when I saw the following line in the Ghostty documentation, I envisioned a way to make my dreams come true:
+
+> Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal
+
+- Read about the protocol in Ghostty docs
+- Missing link: the one part of my usual workflow missing from terminal applications is YouTube
+
+- Getting RGB frames from YouTube with yt-dlp and ffmpeg
+- Displaying RBG frames with the protocol (control data and base 64 encoding)
+- Storing RBG and encoding frames in queues
+- Handling framerate (40 ms intervals + skipping frames to maintain fps)
+
+- Audio samples intro
+- Getting audio samples from yt-dlp and ffmpeg
+- Outputting the audio to PulseAudio
+
+- Syncing audio and video with ready queues
+
+- Shutdown with channels
 
 ---
 
