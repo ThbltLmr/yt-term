@@ -6,11 +6,7 @@ So when I saw the following line in the Ghostty documentation, I envisioned a wa
 
 > Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal
 
-So how can we make that happen?
-
-## The plan
-
-The Kitty graphics protocol lets us display images in the terminal by sending image data (e.g. RGB data) in an escape sequence, alongside properties that tell the terminal how to display the image.
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/) lets you display images in the terminal by sending image data (in RGB, RGBA, or PNG format) in an escape sequence, alongside properties that tell the terminal how to display the image. This means if we get a YouTube video in the form of a stream of RGB frames, we can use the protocol to display them directly in our terminal.
 
 So our high-level plan is the following:
 - Get video data from YouTube
@@ -18,6 +14,7 @@ So our high-level plan is the following:
 - Encode these frames according to the Kitty Graphics protocol
 - Send them to the terminal at the right interval to match the original video's framerate
 
+## Getting a stream of RGB frames with yt-dlp and ffmpeg
 - Read about the protocol in Ghostty docs
 - Missing link: the one part of my usual workflow missing from terminal applications is YouTube
 
