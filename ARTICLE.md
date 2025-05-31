@@ -8,30 +8,96 @@ So when I saw the following line in the Ghostty documentation, I envisioned a wa
 
 The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/) lets you display images in the terminal by sending image data (in RGB, RGBA, or PNG format) in an escape sequence, alongside properties that tell the terminal how to display the image. This means if we get a YouTube video in the form of a stream of RGB frames, we can use the protocol to display them directly in our terminal.
 
-So our high-level plan is the following:
+My initial high-level plan was the following:
 - Get video data from YouTube
 - Convert it to RGB frames
 - Encode these frames according to the Kitty Graphics protocol
 - Send them to the terminal at the right interval to match the original video's framerate
+- (Optional) get audio data from YouTube and play it at the same time
 
 ## Getting a stream of RGB frames with yt-dlp and ffmpeg
-- Read about the protocol in Ghostty docs
-- Missing link: the one part of my usual workflow missing from terminal applications is YouTube
 
+(Un)surprinsingly, getting the actual video data for a YouTube video is not trivial, leading me to wonder: could it be that YouTube does not want you to watch their content in a different client that they don't make money from? Fortunately, programmers much more talented than myself have already tackled this issue in the `yt-dlp` project. `yt-dlp` lets you download YouTube videos from their url in a variety of formats (with different resolutions, framerates, encoding and so on).
+
+Since YouTube does not have video streams directly in RGB format, we need to convert the data we get from `yt-dlp`. The easiest solution I found to do so was to pipe the `stdout` from `yt-dlp` directly into the `stdin` of `ffmpeg`. The output of `ffmpeg` then becomes a stream of RGB frames, which is exactly what we need.
+
+```rust
+// src/video/streamer.rs
+pub fn stream(&self) -> Res<()> {
+    let frame_size = self.width * self.height * 3;
+    let mut yt_dlp_process = Command::new("yt-dlp")
+        .args([
+            "-o",
+            "-",
+            "--no-part",
+            "-f",
+            format!("bestvideo[height={}][width={}]", self.height, self.width).as_str(),
+            &self.url,
+        ])
+        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Could not start yt-dlp process");
+
+    let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
+
+    let mut ffmpeg_process = Command::new("ffmpeg")
+        .args(["-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+        .stdin(Stdio::from(yt_dlp_stdout))
+        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Could not start ffmpeg process");
+        let mut ffmpeg_stdout = ffmpeg_process
+        .stdout
+        .take()
+        .expect("Failed to get ffmpeg stdout");
+    let mut accumulated_data = Vec::new();
+
+    // 32KB chunks, chunks that yt-dlp outputs
+    let yt_dlp_chunk_size = 32768;
+    let mut read_buffer = vec![0u8; yt_dlp_chunk_size];
+        loop {
+        match ffmpeg_stdout.read(&mut read_buffer) {
+            Ok(0) => {
+                self.streaming_done_tx.send(()).unwrap();
+                break;
+            }
+            Ok(bytes_read) => {
+                accumulated_data.extend_from_slice(&read_buffer[0..bytes_read]);
+                    while accumulated_data.len() >= frame_size {
+                    let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
+                    let frame = Frame::new(frame_data);
+                        self.rgb_buffer.lock().unwrap().push_el(frame);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error reading from ffmpeg: {}", e);
+                break;
+            }
+        }
+    }
+    if !accumulated_data.is_empty() {
+        println!("Leftover incomplete data: {} bytes", accumulated_data.len());
+    }
+    let _ = ffmpeg_process.wait();
+    let _ = yt_dlp_process.wait();
+    Ok(())
+}
+```
+I moved this `yt-dlp` -> `ffmpeg` pipeline into its own thread, and save the resulting frames into a buffer so we can encode them to match the Kitty graphics protocol.
+
+---
+- Read about the protocol in Ghostty docs- Missing link: the one part of my usual workflow missing from terminal applications is YouTube
 - Getting RGB frames from YouTube with yt-dlp and ffmpeg
-- Displaying RBG frames with the protocol (control data and base 64 encoding)
-- Storing RBG and encoding frames in queues
+- Displaying RBG frames with the protocol (control data and base 64 encoding)- Storing RBG and encoding frames in queues
 - Handling framerate (40 ms intervals + skipping frames to maintain fps)
-
-- Audio samples intro
-- Getting audio samples from yt-dlp and ffmpeg
+- Audio samples intro- Getting audio samples from yt-dlp and ffmpeg
 - Outputting the audio to PulseAudio
-
 - Syncing audio and video with ready queues
 
 - Shutdown with channels
 
----
 
 ### The Kitty graphics protocol
 The Kitty graphics protocol allows you to send images to the terminal, which can then be displayed in a terminal window.
