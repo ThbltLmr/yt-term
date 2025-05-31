@@ -122,6 +122,34 @@ fn encode_control_data(&self, control_data: HashMap<String, String>) -> Vec<u8> 
 
 The payload itself is simply the RBG data, encoded in base 64:
 
+```rust
+fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
+    let encoded = general_purpose::STANDARD.encode(&rgb);
+    encoded.as_bytes().to_vec()
+}
+```
+
+Once we add in the start and end escape characters, we get a string matching the protocol, ready for display
+
+```rust
+fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
+    // Base64 encode the frame data
+    let encoded_payload = self.encode_rgb(frame.data);
+    let prefix = b"\x1b_G";
+    let suffix = b"\x1b\\";
+    let delimiter = b";";
+    let mut buffer = vec![];
+
+    buffer.extend_from_slice(prefix);
+    buffer.extend_from_slice(&encoded_control_data);
+    buffer.extend_from_slice(delimiter);
+    buffer.extend_from_slice(&encoded_payload);
+    buffer.extend_from_slice(suffix);
+
+    Frame::new(buffer)
+}
+```
+
 ---
 - Read about the protocol in Ghostty docs- Missing link: the one part of my usual workflow missing from terminal applications is YouTube
 - Getting RGB frames from YouTube with yt-dlp and ffmpeg
