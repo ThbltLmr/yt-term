@@ -28,13 +28,16 @@ In this example, the `f`, `s` and `v` keys are the image metadata, and `a=T` tel
 The payload is the actual image data, encoded in base 64. It can be either a file path or the raw image data (the `t` key in the control data can be used to tell the terminal whether we're sending raw data or a file path).
 
 ```
-<ESC>_Gf=24,s=<image width>,v=<image height>,a=T,t=d;<base64_encoded_pixels><ESC>\ # Sending the RGB data directly in the payload
-<ESC>_Gf=24,s=<image width>,v=<image height>,a=T;t=f<base64_encoded_file_path><ESC>\ # Sending the path to a file containing RGB data
-<ESC>_Gf=100,a=T;t=f<base64_encoded_file_path><ESC>\ # Sending the path to a PNG file; width and height are not necessary as they will be in the PNG metadata
+# Sending the RGB data directly in the payload
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T,t=d;<base64_encoded_pixels><ESC>\ 
+# Sending the path to a file containing RGB data
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T;t=f<base64_encoded_file_path><ESC>\ 
+# Sending the path to a PNG file; width and height are not necessary as they will be in the PNG metadata
+<ESC>_Gf=100,a=T;t=f<base64_encoded_file_path><ESC>\ 
 ```
 
 ## Handling parallel encoding and display
-Since our goal is to stream YouTube videos, and not download them, we are going to need to encode and display frames simultaneously. Otherwise, we would not be able to ensure that we are displaying images at the right interval. The approach I chose to store, encode and display threads was the following:
+Since our goal is to stream YouTube videos, we are going to need to encode and display frames simultaneously. The approach I chose to store, encode and display frames was the following:
 - Our program's state is composed of two queues: one stores the frames before we've encoded them to follow the graphics protocol, the other one stores the graphics escape codes ready to be sent to `STDOUT`;
 - One thread receives data from YouTube and stores it in the first queue;
 - A second thread pops each frame from this first queue, converts it to the graphics escape code to display, and stores it in the second queue;
