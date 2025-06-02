@@ -59,7 +59,8 @@ First, I picked a width and height for the frames I wanted to display. I pretend
 
 I could then read the `ffmpeg` output and store each chunk of 691kB to our first queue.
 
-Below is the function that handles starting `yt-dlp` and `ffmpeg` and storing the RGB frames:
+<details>
+<summary>Below is the function that handles starting `yt-dlp` and `ffmpeg` and storing the RGB frames:</summary>
 
 ```rust
     pub fn stream(&self) -> Res<()> {
@@ -129,6 +130,7 @@ Below is the function that handles starting `yt-dlp` and `ffmpeg` and storing th
         Ok(())
     }
 ```
+</details>
 
 ## Encoding frames to be diplayed
 - which control data do we need
