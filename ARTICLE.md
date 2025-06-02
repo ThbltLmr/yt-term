@@ -7,7 +7,7 @@ I recently started using the terminal emulator [Ghostty](https://ghostty.org) an
 In this article, we will learn what the Kitty graphics protocol is, and attempt to use it to stream a YouTube video directly in the terminal.
 
 ## What is the Kitty graphics protocol?
-The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running into terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a sequence to `STDOUT` with the right escape characters and encoding.
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running into terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
 
 So what does that look like? The specification tells us:
 
@@ -33,16 +33,28 @@ The payload is the actual image data, encoded in base 64. It can be either a fil
 <ESC>_Gf=100,a=T;t=f<base64_encoded_file_path><ESC>\ # Sending the path to a PNG file; width and height are not necessary as they will be in the PNG metadata
 ```
 
-## Handling asynchronous encoding and display
-- we want to encode the data and display it as we go
-- need mulitple threads with shared data
-- use shared memory controlled with mutexes
-- schema with how it works
+## Handling parallel encoding and display
+Since our goal is to stream YouTube videos, and not download them, we are going to need to encode and display frames simultaneously. Otherwise, we would not be able to ensure that we are displaying images at the right interval. The approach I chose to store, encode and display threads was the following:
+- Our program's state is composed of two queues: one stores the frames before we've encoded them to follow the graphics protocol, the other one stores the graphics escape codes ready to be sent to `STDOUT`;
+- One thread receives data from YouTube and stores it in the first queue;
+- A second thread pops each frame from this first queue, converts it to the graphics escape code to display, and stores it in the second queue;
+- A third thread pops the graphics escape codes from the second queue to display them at the right frame rate. 
+
+Since I assumed all threads would be simultaneously active with little idle time, I used Rust's `std::thread` and no async runtime. I also used mutexes to share the buffers across threads.
+
+The flow of data in our program should look something like this:
+
+<EXCALIDRAW>
 
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
-- yt-dlp output to stdout, piped to ffmpeg stdin
-- store the output in chunks on 32kb
-- gets us a queue of RGB frames
+The first step is to get the video data from YouTube into our first queue (storing frames before we've encoded them into graphics escape codes). Considering the variety of existing video formats and the complexity of the YouTube API, I cowardly decided to rely on the superior programmers at `yt-dlp` and `ffmpeg` to provide me a stream of RGB frames.
+
+First, I picked a width and height for the frames I wanted to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. Therefore, I knew I was going to store chunks of 360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame. I could then:
+- start `yt-dlp` for my YouTube video of choice, selecting a 360p format and outputting the result to `STDOUT`;
+- pipe the `yt-dlp` output to `ffmpeg`;
+- kindly ask `ffmpeg` to convert the data to RGB and output it to `STDOUT`
+
+I could then read the `ffmpeg` output and store each chunk of 691kB to our first queue.
 
 ## Encoding frames to be diplayed
 - which control data do we need
