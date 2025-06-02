@@ -24,6 +24,15 @@ For instance, if we just need to display some basic RGB data, we just need the f
 ```
 In this example, the `f`, `s` and `v` keys are the image metadata, and `a=T` tells the terminal we want it to display the image.
 
+### Payload
+The payload is the actual image data, encoded in base 64. It can be either a file path or the raw image data (the `t` key in the control data can be used to tell the terminal whether we're sending raw data or a file path).
+
+```
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T,t=d;<base64_encoded_pixels><ESC>\ # Sending the RGB data directly in the payload
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T;t=f<base64_encoded_file_path><ESC>\ # Sending the path to a file containing RGB data
+<ESC>_Gf=100,a=T;t=f<base64_encoded_file_path><ESC>\ # Sending the path to a PNG file; width and height are not necessary as they will be in the PNG metadata
+```
+
 ## Handling asynchronous encoding and display
 - we want to encode the data and display it as we go
 - need mulitple threads with shared data
