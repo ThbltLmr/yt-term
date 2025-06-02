@@ -1,8 +1,28 @@
 # Streaming YouTube videos in the terminal with the Kitty graphics protocol
 
+I recently started using the terminal emulator [Ghostty](https://ghostty.org) and the following line in the documentation peeked my interest:
+
+> Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal.
+
+In this article, we will learn what the Kitty graphics protocol is, and attempt to use it to stream a YouTube video directly in the terminal.
+
 ## What is the Kitty graphics protocol?
-- Graphics protocol implemented in a few terminal emulators to display rgb, rgba or png images
-- Explanation on prefix + control data + payload + suffix
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running into terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a sequence to `STDOUT` with the right escape characters and encoding.
+
+So what does that look like? The specification tells us:
+
+`<ESC>_G<control data>;<payload><ESC>\`
+
+The `<ESC>_G` prefix and the `<ESC>\` suffix are the delimiters to let the terminal know where our image data starts and ends. The two interesting parts in this sequence are the `control_data` and the `payload`.
+
+### Control data
+The control data is a series of comma-separated key-value pairs. It includes some metadata about the image, such as its format, width or height, as well as some instructions for the terminal on how to display the image. You can find a full reference [here](https://sw.kovidgoyal.net/kitty/graphics-protocol/#control-data-reference).
+
+For instance, if we just need to display some basic RGB data, we just need the following:
+```
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T;<payload><ESC>\
+```
+In this example, the `f`, `s` and `v` keys are the image metadata, and `a=T` tells the terminal we want it to display the image.
 
 ## Handling asynchronous encoding and display
 - we want to encode the data and display it as we go
