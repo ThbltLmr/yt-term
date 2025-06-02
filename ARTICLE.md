@@ -133,7 +133,6 @@ Once we add in the start and end escape characters, we get a string matching the
 
 ```rust
 fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
-    // Base64 encode the frame data
     let encoded_payload = self.encode_rgb(frame.data);
     let prefix = b"\x1b_G";
     let suffix = b"\x1b\\";
@@ -150,11 +149,14 @@ fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
 }
 ```
 
+I set up a dedicated thread to read from the RBG frames buffer, and save our Kitty graphics protocol ready frames into a new buffer.
+
 ---
 - Read about the protocol in Ghostty docs- Missing link: the one part of my usual workflow missing from terminal applications is YouTube
 - Getting RGB frames from YouTube with yt-dlp and ffmpeg
 - Displaying RBG frames with the protocol (control data and base 64 encoding)- Storing RBG and encoding frames in queues
 - Handling framerate (40 ms intervals + skipping frames to maintain fps)
+- Display improvements
 - Audio samples intro- Getting audio samples from yt-dlp and ffmpeg
 - Outputting the audio to PulseAudio
 - Syncing audio and video with ready queues
