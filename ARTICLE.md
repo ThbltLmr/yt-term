@@ -36,9 +36,22 @@
 - centering frames
 
 ## Getting audio data
+- same logic as for video, pipe yt-dlp into ffmpeg
+- no need for encoding
+- output to pulseaudio with pulse crate
 
 ## Synchronizing audio and video
+- we can't guarantee that both streams will start at the exact same time + one might buffer
+- implement a 'ready' queue on both sides, to which we add the same time
+- we add one second of content to these queues when both are ready
+- we play from these queues
 
 ## Shutting down the program at the end of the video
+- each producer lets consumer know when it's done
+- if producer is done + queue to be consumed is empty, consumer stops and lets downstream consumer know
+- once the display consumer is done, we can shutdown the program
 
 ## Conclusion and demo
+- screeen capture of demo
+- current memory usage
+- potential for optimization
