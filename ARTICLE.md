@@ -330,10 +330,15 @@ To fix the second issue and ensure that our audio and video stay in sync, I adde
 
 If either stream fell behind, both of these 'ready to play' queues would stop being filled, and both the audio and video outputs would stop and restart at the same time.
 
+The final flow of our program now looks like this:
+<EXCALIDRAW>
+
 ## Shutting down the program at the end of the video
-- each producer lets consumer know when it's done
-- if producer is done + queue to be consumed is empty, consumer stops and lets downstream consumer know
-- once the display consumer is done, we can shutdown the program
+Finally, we need to shut down all our threads as we finish receiving, processing and outputting data. The easiest way I thought of was to create channels, that upstream threads could use to signal downstream threads when done:
+- The threads responsible for starting the `yt-dlp` and `ffmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
+- The thread responsible for creating graphics escape codes shutdowns when the upstream thread is done and the RGB data queue is empty;
+- The thread that fills the 'ready to play' queue shut downs when the encoding thread is done, the audio receiving thread is done, and both of the corresponding queues are empty;
+- The overall program shutdowns when the 'ready to play' queues are done and the thread filling them is done as well.
 
 ## Conclusion and demo
 - screeen capture of demo
