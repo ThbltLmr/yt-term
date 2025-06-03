@@ -5,12 +5,12 @@ use std::{
 };
 
 use crate::helpers::{
-    structs::{Frame, RingBuffer},
-    types::Res,
+    structs::ContentQueue,
+    types::{Bytes, Res},
 };
 
 pub struct VideoStreamer {
-    rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     streaming_done_tx: mpsc::Sender<()>,
     url: String,
     width: usize,
@@ -19,7 +19,7 @@ pub struct VideoStreamer {
 
 impl VideoStreamer {
     pub fn new(
-        rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+        rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         streaming_done_tx: mpsc::Sender<()>,
         url: String,
         width: usize,
@@ -82,9 +82,8 @@ impl VideoStreamer {
 
                     while accumulated_data.len() >= frame_size {
                         let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
-                        let frame = Frame::new(frame_data);
 
-                        self.rgb_buffer.lock().unwrap().push_el(frame);
+                        self.rgb_buffer.lock().unwrap().push_el(frame_data);
                     }
                 }
                 Err(e) => {

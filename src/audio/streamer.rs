@@ -5,19 +5,19 @@ use std::{
 };
 
 use crate::helpers::{
-    structs::{RingBuffer, Sample},
-    types::Res,
+    structs::ContentQueue,
+    types::{Bytes, Res},
 };
 
 pub struct AudioStreamer {
-    audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
+    audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     url: String,
     streaming_done_tx: mpsc::Sender<()>,
 }
 
 impl AudioStreamer {
     pub fn new(
-        audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
+        audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         url: String,
         streaming_done_tx: mpsc::Sender<()>,
     ) -> Res<Self> {
@@ -74,9 +74,8 @@ impl AudioStreamer {
                     while accumulated_data.len() >= sample_size {
                         let sample_data =
                             accumulated_data.drain(0..sample_size).collect::<Vec<u8>>();
-                        let sample = Sample::new(sample_data);
 
-                        self.audio_buffer.lock().unwrap().push_el(sample);
+                        self.audio_buffer.lock().unwrap().push_el(sample_data);
                     }
                 }
                 Err(e) => {

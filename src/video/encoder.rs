@@ -1,5 +1,5 @@
-use crate::helpers::structs::{Frame, RingBuffer};
-use crate::helpers::types::Res;
+use crate::helpers::structs::ContentQueue;
+use crate::helpers::types::{Bytes, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
 use std::{
@@ -8,8 +8,8 @@ use std::{
 };
 
 pub struct Encoder {
-    rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-    encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     width: usize,
     height: usize,
     term_width: u16,
@@ -20,8 +20,8 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new(
-        rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-        encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+        rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,
@@ -50,9 +50,9 @@ impl Encoder {
     }
 
     // Convert a frame to the Kitty Graphics Protocol format
-    fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
+    fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Bytes) -> Bytes {
         // Base64 encode the frame data
-        let encoded_payload = self.encode_rgb(frame.data);
+        let encoded_payload = self.encode_rgb(frame);
         let prefix = b"\x1b_G";
         let suffix = b"\x1b\\";
         let delimiter = b";";
@@ -64,7 +64,7 @@ impl Encoder {
         buffer.extend_from_slice(&encoded_payload);
         buffer.extend_from_slice(suffix);
 
-        Frame::new(buffer)
+        buffer
     }
 
     pub fn encode(&mut self) -> Res<()> {
@@ -133,8 +133,8 @@ mod tests {
 
     #[test]
     fn test_new_encoder() {
-        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
+        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
@@ -155,8 +155,8 @@ mod tests {
     #[test]
     fn test_encode_control_data() {
         let encoder = Encoder::new(
-            Arc::new(Mutex::new(RingBuffer::new(1))),
-            Arc::new(Mutex::new(RingBuffer::new(1))),
+            Arc::new(Mutex::new(ContentQueue::new(1))),
+            Arc::new(Mutex::new(ContentQueue::new(1))),
             640,
             480,
             mpsc::channel().1,
@@ -185,8 +185,8 @@ mod tests {
 
     #[test]
     fn test_encode_frame() {
-        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
+        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
@@ -200,7 +200,7 @@ mod tests {
         )
         .unwrap();
 
-        let test_frame = Frame::new(vec![0; 640 * 480 * 3]);
+        let test_frame = vec![0; 640 * 480 * 3];
         rgb_buffer.lock().unwrap().push_el(test_frame);
 
         thread::spawn(move || {
@@ -215,8 +215,8 @@ mod tests {
 
     #[test]
     fn test_get_terminal_size() {
-        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
+        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 

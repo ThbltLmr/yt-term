@@ -1,70 +1,55 @@
 use std::io::{self, Write};
-use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
-use crate::helpers::structs::{Frame, RingBuffer};
-use crate::helpers::types::Res;
+use crate::helpers::adapter::Adapter;
+use crate::helpers::structs::ContentQueue;
+use crate::helpers::types::{Bytes, Res};
 use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
-    frame_interval: Duration,
-    encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-    video_queueing_done_rx: mpsc::Receiver<()>,
+    interval: Duration,
+    buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    producer_done_rx: Receiver<()>,
 }
 
-impl TerminalAdapter {
-    pub fn new(
-        frame_interval: usize,
-        encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-        video_queueing_done_rx: mpsc::Receiver<()>,
+impl Adapter for TerminalAdapter {
+    fn new(
+        interval: Duration,
+        buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        producer_done_rx: Receiver<()>,
     ) -> Res<Self> {
         Ok(TerminalAdapter {
-            frame_interval: Duration::from_millis(frame_interval as u64),
-            encoded_buffer,
-            video_queueing_done_rx,
+            interval,
+            buffer,
+            producer_done_rx,
         })
     }
 
-    fn display_frame(&self, frame: Frame) -> Res<()> {
+    fn get_buffer(&self) -> Arc<Mutex<ContentQueue<Bytes>>> {
+        self.buffer.clone()
+    }
+
+    fn get_interval(&self) -> Duration {
+        self.interval
+    }
+
+    fn is_producer_done(&self) -> bool {
+        self.producer_done_rx.try_recv().is_ok()
+    }
+
+    fn process_element(&self, frame: Bytes) -> Res<()> {
         let mut stdout = io::stdout();
 
         let reset_cursor = b"\x1B[H";
         let mut buffer = vec![];
 
         buffer.extend_from_slice(reset_cursor);
-        buffer.extend_from_slice(&frame.data);
+        buffer.extend_from_slice(&frame);
 
         stdout.write_all(&buffer)?;
         stdout.flush()?;
         Ok(())
-    }
-
-    pub fn display(&self) -> Res<()> {
-        let mut last_frame_time = std::time::Instant::now();
-        let mut total_frames_counter = 0;
-        loop {
-            if self.encoded_buffer.lock().unwrap().len() == 0 {
-                if self.video_queueing_done_rx.try_recv().is_ok() {
-                    return Ok(());
-                }
-            } else if last_frame_time.elapsed() >= self.frame_interval {
-                let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
-                if let Some(frame) = encoded_frame {
-                    if total_frames_counter > 0
-                        && last_frame_time.elapsed()
-                            > self.frame_interval + Duration::from_millis(2)
-                    {
-                        last_frame_time += self.frame_interval;
-                        total_frames_counter += 1;
-                        continue;
-                    }
-
-                    last_frame_time = std::time::Instant::now();
-                    total_frames_counter += 1;
-                    self.display_frame(frame)?;
-                }
-            }
-        }
     }
 }
 
@@ -76,8 +61,9 @@ mod tests {
     #[test]
     fn video_adapter_creation() {
         let (_tx, rx) = mpsc::channel();
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
-        let display_manager = TerminalAdapter::new(30, encoded_buffer.clone(), rx);
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+        let display_manager =
+            TerminalAdapter::new(Duration::from_millis(30), encoded_buffer.clone(), rx);
 
         assert!(display_manager.is_ok());
     }
