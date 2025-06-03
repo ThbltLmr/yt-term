@@ -31,11 +31,7 @@ pub trait Adapter {
 
     fn get_interval(&self) -> Duration;
 
-    fn get_producer_done(&self) -> Receiver<()>;
-
-    fn is_producer_done(&self) -> bool {
-        self.get_producer_done().try_recv().is_ok()
-    }
+    fn is_producer_done(&self) -> bool;
 
     fn get_interval_plus_five_percent(&self) -> Duration {
         Duration::from_millis((1.05 * self.get_interval().as_millis() as f64) as u64)

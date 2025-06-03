@@ -18,11 +18,13 @@ mod audio {
 }
 
 use std::{
-    sync::{Arc, Mutex},
+    sync::{mpsc::channel, Arc, Mutex},
     thread,
+    time::Duration,
 };
 
 use helpers::{
+    adapter::Adapter,
     args::{parse_args, Args},
     structs::{ContentQueue, ScreenGuard},
     types::Bytes,
@@ -37,14 +39,14 @@ fn main() {
     let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
     let audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
 
-    let (audio_streaming_done_tx, audio_streaming_done_rx) = std::sync::mpsc::channel();
-    let (video_streaming_done_tx, video_streaming_done_rx) = std::sync::mpsc::channel();
-    let (video_encoding_done_tx, video_encoding_done_rx) = std::sync::mpsc::channel();
+    let (audio_streaming_done_tx, audio_streaming_done_rx) = channel();
+    let (video_streaming_done_tx, video_streaming_done_rx) = channel();
+    let (video_encoding_done_tx, video_encoding_done_rx) = channel();
 
-    let (audio_queueing_done_tx, audio_queueing_done_rx) = std::sync::mpsc::channel();
-    let (video_queueing_done_tx, video_queueing_done_rx) = std::sync::mpsc::channel();
+    let (audio_queueing_done_tx, audio_queueing_done_rx) = channel();
+    let (video_queueing_done_tx, video_queueing_done_rx) = channel();
 
-    let (playing_done_tx, playing_done_rx) = std::sync::mpsc::channel();
+    let (playing_done_tx, playing_done_rx) = channel();
 
     let audio_streamer = audio::streamer::AudioStreamer::new(
         audio_buffer.clone(),
@@ -91,14 +93,15 @@ fn main() {
     let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
     let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
 
-    let audio_adapter =
-        audio::adapter::AudioAdapter::new(1000, ready_audio_buffer.clone(), audio_queueing_done_rx)
-            .expect("Failed to create audio adapter");
+    let audio_adapter = audio::adapter::AudioAdapter::new(
+        Duration::from_secs(1),
+        ready_audio_buffer.clone(),
+        audio_queueing_done_rx,
+    )
+    .expect("Failed to create audio adapter");
 
     thread::spawn(move || {
-        audio_adapter
-            .play()
-            .expect("Failed to start audio playback");
+        audio_adapter.run().expect("Failed to start audio playback");
     });
 
     let video_adapter = video::adapter::TerminalAdapter::new(
