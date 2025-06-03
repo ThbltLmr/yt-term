@@ -207,7 +207,7 @@ fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
 ## Managing the frame rate
 To display a frame, all we need to do is write the graphics escape code to `STDOUT`. Our `yt-dlp` + `ffmpeg` flow already gives us the frames in the right order, so we don't need to worry about ordering. We do however need to take care of frame rate. In all formats I have seen, 360p YouTube videos have a 25 FPS frame rate, meaning we have to display one frame every 1000 / 25 = 40 ms.
 
-Because displaying the frame takes a non-negligible time (for example if we need time to acquire the mutex of our second buffer), we can't simply make the thread sleep after each frame. Instead, we can measure the time since the last displayed frame, and only display the new one if the elapsed time since the last frame is over 40 ms.
+Because displaying the frame takes a non-negligible time, we can't simply make the thread sleep after each frame. Instead, we can measure the time since the last displayed frame, and only display the new one if the elapsed time since the last frame is over 40 ms.
 
 ```rust
 let mut last_frame_time = std::time::instant::now();
@@ -223,12 +223,40 @@ loop {
 }
 ```
 
-I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. It turned out that the operation of getting a frame and displaying it something took over 40 ms, so the video would lag behind. 
-- read from the queue of frames to be displayed
-- time when each frame is displayed
-- only display next frame once 40 ms have passed
-- issue: what if it took 40+ ms to display the frame
-- skip frames when needed
+I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. It turned out that the operation of getting a frame and displaying it something took over 40 ms, so the video would lag behind. To fix this, I added a frame skipping check: if we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one.
+
+<details>
+<summary>My implementation, including the frame skipping, looks like this</summary>
+
+```rust
+pub fn display(&self) -> Res<()> {
+    let mut last_frame_time = std::time::Instant::now();
+    let mut total_frames_counter = 0;
+    loop {
+        if self.encoded_buffer.lock().unwrap().len() == 0 {
+            if self.video_queueing_done_rx.try_recv().is_ok() {
+                return Ok(());
+            }
+        } else if last_frame_time.elapsed() >= self.frame_interval {
+            let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+            if let Some(frame) = encoded_frame {
+                if total_frames_counter > 0
+                    && last_frame_time.elapsed()
+                        > self.frame_interval + Duration::from_millis(2)
+                {
+                    last_frame_time += self.frame_interval;
+                    total_frames_counter += 1;
+                    continue;
+                }
+                last_frame_time = std::time::Instant::now();
+                total_frames_counter += 1;
+                self.display_frame(frame)?;
+            }
+        }
+    }
+}
+```
+</details>
 
 ## Improving the display
 - clearing the terminal and resetting cursor
