@@ -133,12 +133,75 @@ I could then read the `ffmpeg` output and store each chunk of 691kB to our first
 </details>
 
 ## Encoding frames to be diplayed
-- which control data do we need
-- encode the control data once
-- read from queue of rgb frames
-- encode each frame in base64
-- send to the terminal the whole thing
-- now we have a separate queue of frames ready to be displayed
+Now that we are have a queue of RGB frames, we need to convert them to graphics escape codes matching the Kitty graphics protocol. To do so, we need some control data (which will be the same in every escape code), and we need to encode the RGB data in base64. 
+Here are the control data key-value pairs that we need:
+- `f=24`: to signal that we are sending RGB data;
+- `s=640`: the height of the image;
+- `v=360`: the width of the image;
+- `t=d`: to signal that the image data will be directly in the payload;
+- `a=T`: to instruct the terminal to display the frame when received.
+
+Once we have this control data, we simply need to repeat the same few steps for each frame:
+- read the RGB data from our first queue;
+- encode it in base 64 (I used the base64 crate)
+- return a slice with the encode prefix (`<ESC>_G`), our control data, the base 64 encoded data, and the suffix (`<ESC>\`)
+- store this slice in our second queue, ready for display;
+
+<details>
+<summary>This is what my encoding class looks like</summary>
+```rust
+fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
+    // Base64 encode the frame data
+    let encoded_payload = self.encode_rgb(frame.data);
+    let prefix = b"\x1b_G";
+    let suffix = b"\x1b\\";
+    let delimiter = b";";
+    let mut buffer = vec![];
+    buffer.extend_from_slice(prefix);
+    buffer.extend_from_slice(&encoded_control_data);
+    buffer.extend_from_slice(delimiter);
+    buffer.extend_from_slice(&encoded_payload);
+    buffer.extend_from_slice(suffix);
+    Frame::new(buffer)
+}
+pub fn encode(&mut self) -> Res<()> {
+    loop {
+        let mut rgb_buffer = self.rgb_buffer.lock().unwrap();
+        let x_offset = (self.term_width as usize - self.width) / 2;
+        let y_offset = (self.term_height as usize - self.height) / 2;
+        let encoded_control_data = self.encode_control_data(HashMap::from([
+            ("f".into(), "24".into()),
+            ("s".into(), format!("{}", self.width)),
+            ("v".into(), format!("{}", self.height)),
+            ("t".into(), "d".into()),
+            ("a".into(), "T".into()),
+            ("X".into(), format!("{}", x_offset)),
+            ("Y".into(), format!("{}", y_offset)),
+        ]));
+        let frame = rgb_buffer.get_el();
+        if let Some(frame) = frame {
+            let encoded_frame = self.encode_frame(encoded_control_data, frame);
+            let mut encoded_buffer = self.encoded_buffer.lock().unwrap();
+            encoded_buffer.push_el(encoded_frame);
+        } else if self.streaming_done_rx.try_recv().is_ok() {
+            self.encoding_done_tx.send(()).unwrap();
+            return Ok(());
+        }
+    }
+}
+fn encode_control_data(&self, control_data: HashMap<String, String>) -> Vec<u8> {
+    let mut encoded_data = Vec::new();
+    for (key, value) in control_data {
+        encoded_data.push(format!("{}={}", key, value));
+    }
+    encoded_data.join(",").as_bytes().to_vec()
+}
+fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
+    let encoded = general_purpose::STANDARD.encode(&rgb);
+    encoded.as_bytes().to_vec()
+}
+```
+</details>
 
 ## Managing the frame rate
 - read from the queue of frames to be displayed
