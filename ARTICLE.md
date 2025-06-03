@@ -205,6 +205,25 @@ fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
 </details>
 
 ## Managing the frame rate
+To display a frame, all we need to do is write the graphics escape code to `STDOUT`. Our `yt-dlp` + `ffmpeg` flow already gives us the frames in the right order, so we don't need to worry about ordering. We do however need to take care of frame rate. In all formats I have seen, 360p YouTube videos have a 25 FPS frame rate, meaning we have to display one frame every 1000 / 25 = 40 ms.
+
+Because displaying the frame takes a non-negligible time (for example if we need time to acquire the mutex of our second buffer), we can't simply make the thread sleep after each frame. Instead, we can measure the time since the last displayed frame, and only display the new one if the elapsed time since the last frame is over 40 ms.
+
+```rust
+let mut last_frame_time = std::time::instant::now();
+loop {
+    // we only get a frame if over 40 ms have passed since the last one
+        if last_frame_time.elapsed() >= self.frame_interval {
+        let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+        if let some(frame) = encoded_frame {
+            last_frame_time = std::time::instant::now();
+            self.display_frame(frame)?;
+        }
+    }
+}
+```
+
+I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. It turned out that the operation of getting a frame and displaying it something took over 40 ms, so the video would lag behind. 
 - read from the queue of frames to be displayed
 - time when each frame is displayed
 - only display next frame once 40 ms have passed
