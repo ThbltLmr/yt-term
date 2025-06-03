@@ -4,26 +4,6 @@ use std::sync::{Arc, Mutex};
 
 use super::types::Res;
 
-pub struct Frame {
-    pub data: Vec<u8>,
-}
-
-impl Frame {
-    pub fn new(data: Vec<u8>) -> Self {
-        Frame { data }
-    }
-}
-
-pub struct Sample {
-    pub data: Vec<u8>,
-}
-
-impl Sample {
-    pub fn new(data: Vec<u8>) -> Self {
-        Sample { data }
-    }
-}
-
 pub struct RingBuffer<T> {
     elements: VecDeque<T>,
     el_per_second: usize,
@@ -121,8 +101,8 @@ mod tests {
         let mut buffer = RingBuffer::new(1);
         assert_eq!(buffer.len(), 0);
 
-        let frame1 = Frame::new(vec![1, 2, 3]);
-        let frame2 = Frame::new(vec![4, 5, 6]);
+        let frame1 = vec![1, 2, 3];
+        let frame2 = vec![4, 5, 6];
 
         buffer.push_el(frame1);
         buffer.push_el(frame2);
@@ -130,7 +110,7 @@ mod tests {
         assert_eq!(buffer.len(), 2);
 
         let retrieved_frame = buffer.get_el().unwrap();
-        assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
+        assert_eq!(retrieved_frame, vec![1, 2, 3]);
 
         assert_eq!(buffer.len(), 1);
     }
@@ -138,14 +118,14 @@ mod tests {
     #[test]
     fn ring_buffer_pop_one_second() {
         let mut buffer = RingBuffer::new(2);
-        buffer.push_el(Frame::new(vec![1, 2, 3]));
-        buffer.push_el(Frame::new(vec![4, 5, 6]));
-        buffer.push_el(Frame::new(vec![7, 8, 9]));
+        buffer.push_el(vec![1, 2, 3]);
+        buffer.push_el(vec![4, 5, 6]);
+        buffer.push_el(vec![7, 8, 9]);
 
         let popped = buffer.pop_one_second();
         assert_eq!(popped.len(), 2);
-        assert_eq!(popped[0].data, vec![1, 2, 3]);
-        assert_eq!(popped[1].data, vec![4, 5, 6]);
+        assert_eq!(popped[0], vec![1, 2, 3]);
+        assert_eq!(popped[1], vec![4, 5, 6]);
         assert_eq!(buffer.len(), 1);
     }
 
@@ -154,15 +134,15 @@ mod tests {
         let mut buffer = RingBuffer::new(2);
         assert!(!buffer.has_one_second_ready());
 
-        buffer.push_el(Frame::new(vec![1, 2, 3]));
+        buffer.push_el(vec![1, 2, 3]);
         assert!(!buffer.has_one_second_ready());
 
-        buffer.push_el(Frame::new(vec![4, 5, 6]));
+        buffer.push_el(vec![4, 5, 6]);
         assert!(buffer.has_one_second_ready());
     }
 
     #[test]
-    fn screen_guard_creation() {
+    fn test_screen_guard() {
         let guard = ScreenGuard::new();
         assert!(guard.is_ok());
     }

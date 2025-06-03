@@ -3,29 +3,27 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use super::{
-    structs::{Frame, RingBuffer, Sample},
-    types::Res,
-};
+use super::types::Bytes;
+use super::{structs::RingBuffer, types::Res};
 
 pub struct Logger {
     start_time: Instant,
     log_file: std::fs::File,
-    raw_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-    encoded_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-    audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
-    ready_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-    ready_audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
+    raw_video_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    encoded_video_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    ready_video_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    ready_audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
     playing_done_rx: std::sync::mpsc::Receiver<()>,
 }
 
 impl Logger {
     pub fn new(
-        raw_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-        encoded_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-        audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
-        ready_video_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-        ready_audio_buffer: Arc<Mutex<RingBuffer<Sample>>>,
+        raw_video_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        encoded_video_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        ready_video_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        ready_audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
         playing_done_rx: std::sync::mpsc::Receiver<()>,
     ) -> Res<Self> {
         let log_file =

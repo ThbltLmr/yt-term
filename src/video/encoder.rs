@@ -1,5 +1,5 @@
-use crate::helpers::structs::{Frame, RingBuffer};
-use crate::helpers::types::Res;
+use crate::helpers::structs::RingBuffer;
+use crate::helpers::types::{Bytes, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
 use std::{
@@ -8,8 +8,8 @@ use std::{
 };
 
 pub struct Encoder {
-    rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-    encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    rgb_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
     width: usize,
     height: usize,
     term_width: u16,
@@ -20,8 +20,8 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new(
-        rgb_buffer: Arc<Mutex<RingBuffer<Frame>>>,
-        encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+        rgb_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,
@@ -50,9 +50,9 @@ impl Encoder {
     }
 
     // Convert a frame to the Kitty Graphics Protocol format
-    fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
+    fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Bytes) -> Bytes {
         // Base64 encode the frame data
-        let encoded_payload = self.encode_rgb(frame.data);
+        let encoded_payload = self.encode_rgb(frame);
         let prefix = b"\x1b_G";
         let suffix = b"\x1b\\";
         let delimiter = b";";
@@ -64,7 +64,7 @@ impl Encoder {
         buffer.extend_from_slice(&encoded_payload);
         buffer.extend_from_slice(suffix);
 
-        Frame::new(buffer)
+        buffer
     }
 
     pub fn encode(&mut self) -> Res<()> {
@@ -200,7 +200,7 @@ mod tests {
         )
         .unwrap();
 
-        let test_frame = Frame::new(vec![0; 640 * 480 * 3]);
+        let test_frame = vec![0; 640 * 480 * 3];
         rgb_buffer.lock().unwrap().push_el(test_frame);
 
         thread::spawn(move || {

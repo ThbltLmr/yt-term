@@ -2,20 +2,20 @@ use std::io::{self, Write};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use crate::helpers::structs::{Frame, RingBuffer};
-use crate::helpers::types::Res;
+use crate::helpers::structs::RingBuffer;
+use crate::helpers::types::{Bytes, Res};
 use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
     frame_interval: Duration,
-    encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+    encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
     video_queueing_done_rx: mpsc::Receiver<()>,
 }
 
 impl TerminalAdapter {
     pub fn new(
         frame_interval: usize,
-        encoded_buffer: Arc<Mutex<RingBuffer<Frame>>>,
+        encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
         video_queueing_done_rx: mpsc::Receiver<()>,
     ) -> Res<Self> {
         Ok(TerminalAdapter {
@@ -25,14 +25,14 @@ impl TerminalAdapter {
         })
     }
 
-    fn display_frame(&self, frame: Frame) -> Res<()> {
+    fn display_frame(&self, frame: Bytes) -> Res<()> {
         let mut stdout = io::stdout();
 
         let reset_cursor = b"\x1B[H";
         let mut buffer = vec![];
 
         buffer.extend_from_slice(reset_cursor);
-        buffer.extend_from_slice(&frame.data);
+        buffer.extend_from_slice(&frame);
 
         stdout.write_all(&buffer)?;
         stdout.flush()?;
