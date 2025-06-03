@@ -60,7 +60,7 @@ First, I picked a width and height for the frames I wanted to display. I pretend
 I could then read the `ffmpeg` output and store each chunk of 691kB to our first queue.
 
 <details>
-<summary>Below is the function that handles starting `yt-dlp` and `ffmpeg` and storing the RGB frames:</summary>
+<summary>This is what the function handling this pipeline looks like</summary>
 
 ```rust
     pub fn stream(&self) -> Res<()> {
@@ -149,6 +149,7 @@ Once we have this control data, we simply need to repeat the same few steps for 
 
 <details>
 <summary>This is what my encoding class looks like</summary>
+
 ```rust
 fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
     // Base64 encode the frame data
