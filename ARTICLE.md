@@ -259,8 +259,50 @@ pub fn display(&self) -> Res<()> {
 </details>
 
 ## Improving the display
-- clearing the terminal and resetting cursor
-- using alternate screen
+At this stage, running my program would "work". It would play the video I wanted, albeit with pretty low quality and frame rate, in my terminal. However, the video would play over my regular terminal, and I could still see my logs behind the image. I could also see my cursor on the bottom right of the image.
+
+So I added a few display improvements to make the viewing experience slighlty more bearable.
+
+First, I added an escape code right before every frame: 
+```rust
+let reset_cursor = b"\x1B[H";
+```
+
+Sending this before every frame ensure my cursor was always at the top left, which also helped keep frame positioning consistent.
+
+Second, I moved the video to the terminal's alternate screen, so it wouldn't conflict with logs. To make sure that the alternate screen would be toggled at the start of the program and reset at the end, I added a dedicated `ScreenGuard` struct, which starts the alternate screen when created and resets it when dropped. I could then create an instance of the struct at the beginning of `main`, and be sure that it would be dropped at the end of the function.
+```rust
+pub struct ScreenGuard {}
+
+impl ScreenGuard {
+    pub fn new() -> Res<Self> {
+        let mut stdout = std::io::stdout();
+        let alternate_screen = b"\x1B[?1049h";
+
+        stdout.write_all(alternate_screen)?;
+        stdout.flush()?;
+        Ok(ScreenGuard {})
+    }
+}
+
+impl Drop for ScreenGuard {
+    fn drop(&mut self) {
+        let mut stdout = std::io::stdout();
+
+        let mut buffer = vec![];
+        let reset = b"\x1B[?1049l";
+        let clear = b"\x1b[2J";
+        let cursor = b"\x1b[H";
+        buffer.extend_from_slice(reset);
+        buffer.extend_from_slice(clear);
+        buffer.extend_from_slice(cursor);
+
+        stdout.write_all(&buffer).unwrap();
+        stdout.flush().unwrap();
+    }
+}
+```
+
 - centering frames
 
 ## Getting audio data
