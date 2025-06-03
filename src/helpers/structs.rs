@@ -4,14 +4,14 @@ use std::sync::{Arc, Mutex};
 
 use super::types::Res;
 
-pub struct RingBuffer<T> {
+pub struct ContentQueue<T> {
     elements: VecDeque<T>,
     el_per_second: usize,
 }
 
-impl<T> RingBuffer<T> {
+impl<T> ContentQueue<T> {
     pub fn new(el_per_second: usize) -> Self {
-        RingBuffer {
+        ContentQueue {
             elements: VecDeque::new(),
             el_per_second,
         }
@@ -21,7 +21,7 @@ impl<T> RingBuffer<T> {
         self.elements.len() >= self.el_per_second
     }
 
-    pub fn queue_one_second_into(&mut self, queue: Arc<Mutex<RingBuffer<T>>>) {
+    pub fn queue_one_second_into(&mut self, queue: Arc<Mutex<ContentQueue<T>>>) {
         let mut queue = queue.lock().unwrap();
         let elements = self.pop_one_second();
         queue.push_elements(elements);
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn ring_buffer_push_and_get() {
-        let mut buffer = RingBuffer::new(1);
+        let mut buffer = ContentQueue::new(1);
         assert_eq!(buffer.len(), 0);
 
         let frame1 = vec![1, 2, 3];
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn ring_buffer_pop_one_second() {
-        let mut buffer = RingBuffer::new(2);
+        let mut buffer = ContentQueue::new(2);
         buffer.push_el(vec![1, 2, 3]);
         buffer.push_el(vec![4, 5, 6]);
         buffer.push_el(vec![7, 8, 9]);
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn ring_buffer_has_one_second_ready() {
-        let mut buffer = RingBuffer::new(2);
+        let mut buffer = ContentQueue::new(2);
         assert!(!buffer.has_one_second_ready());
 
         buffer.push_el(vec![1, 2, 3]);

@@ -23,7 +23,7 @@ use std::{
 
 use helpers::{
     args::{parse_args, Args},
-    structs::{RingBuffer, ScreenGuard},
+    structs::{ContentQueue, ScreenGuard},
     types::Bytes,
 };
 
@@ -32,9 +32,9 @@ fn main() {
 
     let Args { url, width, height } = parse_args();
 
-    let raw_video_buffer = Arc::new(Mutex::new(RingBuffer::<Bytes>::new(25)));
-    let encoded_video_buffer = Arc::new(Mutex::new(RingBuffer::<Bytes>::new(25)));
-    let audio_buffer = Arc::new(Mutex::new(RingBuffer::<Bytes>::new(1)));
+    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
+    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
+    let audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
 
     let (audio_streaming_done_tx, audio_streaming_done_rx) = std::sync::mpsc::channel();
     let (video_streaming_done_tx, video_streaming_done_rx) = std::sync::mpsc::channel();
@@ -87,8 +87,8 @@ fn main() {
         encoder.encode().expect("Failed to start encoding");
     });
 
-    let ready_audio_buffer = Arc::new(Mutex::new(RingBuffer::<Bytes>::new(1)));
-    let ready_video_buffer = Arc::new(Mutex::new(RingBuffer::<Bytes>::new(25)));
+    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
+    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
 
     let audio_adapter =
         audio::adapter::AudioAdapter::new(1000, ready_audio_buffer.clone(), audio_queueing_done_rx)

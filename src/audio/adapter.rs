@@ -5,21 +5,21 @@ use simple_pulse::Simple;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use crate::helpers::structs::RingBuffer;
+use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{Bytes, Res};
 use crate::{Arc, Mutex};
 
 pub struct AudioAdapter {
     simple: Simple,
     sample_interval: Duration,
-    audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     audio_queueing_done_rx: mpsc::Receiver<()>,
 }
 
 impl AudioAdapter {
     pub fn new(
         sample_interval_ms: usize,
-        audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         audio_queueing_done_rx: mpsc::Receiver<()>,
     ) -> Res<Self> {
         let spec = Spec {

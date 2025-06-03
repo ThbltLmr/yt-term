@@ -2,20 +2,20 @@ use std::io::{self, Write};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use crate::helpers::structs::RingBuffer;
+use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{Bytes, Res};
 use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
     frame_interval: Duration,
-    encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     video_queueing_done_rx: mpsc::Receiver<()>,
 }
 
 impl TerminalAdapter {
     pub fn new(
         frame_interval: usize,
-        encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         video_queueing_done_rx: mpsc::Receiver<()>,
     ) -> Res<Self> {
         Ok(TerminalAdapter {
@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn video_adapter_creation() {
         let (_tx, rx) = mpsc::channel();
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(30)));
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
         let display_manager = TerminalAdapter::new(30, encoded_buffer.clone(), rx);
 
         assert!(display_manager.is_ok());

@@ -5,12 +5,12 @@ use std::{
 };
 
 use crate::helpers::{
-    structs::RingBuffer,
+    structs::ContentQueue,
     types::{Bytes, Res},
 };
 
 pub struct VideoStreamer {
-    rgb_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     streaming_done_tx: mpsc::Sender<()>,
     url: String,
     width: usize,
@@ -19,7 +19,7 @@ pub struct VideoStreamer {
 
 impl VideoStreamer {
     pub fn new(
-        rgb_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         streaming_done_tx: mpsc::Sender<()>,
         url: String,
         width: usize,

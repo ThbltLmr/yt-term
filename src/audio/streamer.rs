@@ -5,19 +5,19 @@ use std::{
 };
 
 use crate::helpers::{
-    structs::RingBuffer,
+    structs::ContentQueue,
     types::{Bytes, Res},
 };
 
 pub struct AudioStreamer {
-    audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     url: String,
     streaming_done_tx: mpsc::Sender<()>,
 }
 
 impl AudioStreamer {
     pub fn new(
-        audio_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         url: String,
         streaming_done_tx: mpsc::Sender<()>,
     ) -> Res<Self> {

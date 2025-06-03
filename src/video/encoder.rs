@@ -1,4 +1,4 @@
-use crate::helpers::structs::RingBuffer;
+use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{Bytes, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
@@ -8,8 +8,8 @@ use std::{
 };
 
 pub struct Encoder {
-    rgb_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
-    encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+    rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
     width: usize,
     height: usize,
     term_width: u16,
@@ -20,8 +20,8 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new(
-        rgb_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
-        encoded_buffer: Arc<Mutex<RingBuffer<Bytes>>>,
+        rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,
@@ -133,8 +133,8 @@ mod tests {
 
     #[test]
     fn test_new_encoder() {
-        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
+        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
@@ -155,8 +155,8 @@ mod tests {
     #[test]
     fn test_encode_control_data() {
         let encoder = Encoder::new(
-            Arc::new(Mutex::new(RingBuffer::new(1))),
-            Arc::new(Mutex::new(RingBuffer::new(1))),
+            Arc::new(Mutex::new(ContentQueue::new(1))),
+            Arc::new(Mutex::new(ContentQueue::new(1))),
             640,
             480,
             mpsc::channel().1,
@@ -185,8 +185,8 @@ mod tests {
 
     #[test]
     fn test_encode_frame() {
-        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
+        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
@@ -215,8 +215,8 @@ mod tests {
 
     #[test]
     fn test_get_terminal_size() {
-        let rgb_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(RingBuffer::new(1)));
+        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
