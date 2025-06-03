@@ -105,16 +105,14 @@ fn main() {
     });
 
     let video_adapter = video::adapter::TerminalAdapter::new(
-        1000 / 25,
+        Duration::from_millis(40),
         ready_video_buffer.clone(),
         video_queueing_done_rx,
     )
     .expect("Failed to create video adapter");
 
     thread::spawn(move || {
-        video_adapter
-            .display()
-            .expect("Failed to start video display");
+        video_adapter.run().expect("Failed to start video display");
     });
 
     let mut logger = helpers::logger::Logger::new(
