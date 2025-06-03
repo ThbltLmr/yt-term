@@ -303,7 +303,20 @@ impl Drop for ScreenGuard {
 }
 ```
 
-- centering frames
+Finally, I wanted to center the video frame in the terminal. I used an IOCTL system call to get the terminal's windown size, and used it to add an offset in the control data that we add in the graphics escape codes.
+
+```rust
+fn get_terminal_size() -> std::io::Result<(u16, u16)> {
+    let mut winsize: libc::winsize = unsafe { mem::zeroed() };
+    let result = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) };
+    if result == -1 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok((winsize.ws_xpixel, winsize.ws_ypixel))
+}
+```
+
+We now have a YouTube video player, right in our terminal! How about adding sound?
 
 ## Getting audio data
 - same logic as for video, pipe yt-dlp into ffmpeg
