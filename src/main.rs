@@ -1,4 +1,5 @@
 mod helpers {
+    pub mod adapter;
     pub mod args;
     pub mod logger;
     pub mod structs;
