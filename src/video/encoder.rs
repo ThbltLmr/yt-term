@@ -110,7 +110,6 @@ impl Encoder {
         let encoded = general_purpose::STANDARD.encode(&rgb);
         encoded.as_bytes().to_vec()
     }
-
     fn get_terminal_size() -> std::io::Result<(u16, u16)> {
         let mut winsize: libc::winsize = unsafe { mem::zeroed() };
 

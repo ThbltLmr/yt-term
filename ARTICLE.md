@@ -319,15 +319,16 @@ fn get_terminal_size() -> std::io::Result<(u16, u16)> {
 We now have a YouTube video player, right in our terminal! How about adding sound?
 
 ## Getting audio data
-- same logic as for video, pipe yt-dlp into ffmpeg
-- no need for encoding
-- output to pulseaudio with pulse crate
+First, we need to get audio data. Luckily, we can just repeat the same `yt-dlp` - `ffmpeg` flow that we add for video, with different params. This time, instead of asking `ffmpeg` to output RGB data, we can specifiy an audio sample format. I went with a 48kHz frequency stereo format, meaning a one-second sample would be 48000 * 2 * 2 = 192 kB.
+
+Initally, I tried setting `ffmpeg` to directly output to PulseAudio. While this did work to play the sound of the video, it would not guarantee that 1) both the audio and the video would start simultaneously, and 2) one stream will pause if the other is buffering.
+
+To fix problem 1, I replicated the queueing strategy I implemented for video, by storing the audio samples in a queue.
 
 ## Synchronizing audio and video
-- we can't guarantee that both streams will start at the exact same time + one might buffer
-- implement a 'ready' queue on both sides, to which we add the same time
-- we add one second of content to these queues when both are ready
-- we play from these queues
+To fix the second issue and ensure that our audio and video stay in sync, I added an addition layer of buffer. This would be two 'ready to play' queues, in which I would move the graphics escape codes and audio samples only when one second of both is ready. Thus, both of these queues would always contain the same amount of stored content. I could then read from these queues when I needed to send data to either the terminal or audio pulse.
+
+If either stream fell behind, both of these 'ready to play' queues would stop being filled, and both the audio and video outputs would stop and restart at the same time.
 
 ## Shutting down the program at the end of the video
 - each producer lets consumer know when it's done
