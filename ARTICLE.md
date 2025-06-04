@@ -1,6 +1,8 @@
 # Streaming YouTube videos in the terminal with the Kitty graphics protocol
 
-I recently started using the terminal emulator [Ghostty](https://ghostty.org) and the following line in the documentation peeked my interest:
+Over the past few months, I have been slowly turning my terminal into my happy place: switching from VSCode to Neovim, setting up [Neomutt](https://neomutt.org/) to read my emails, even occasionally using [lynx](https://lynx.invisible-island.net/) to browse so text-heavy websites. But I was still reliant on my regular browser to watch my favorite Minecraft let's play videos and NordVPN ads.
+
+That is, until I read the following line in the documentation for [Ghostty](https://ghostty.org):
 
 > Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal.
 
