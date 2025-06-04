@@ -8,7 +8,7 @@ That is, until I read the following line in the documentation for [Ghostty](http
 
 It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp.
 
-In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality terminal video streaming program, using `yt-dlp`, `ffmpeg` and the Kitty graphics protocol.
+In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality terminal video streaming program in Rust, using `yt-dlp`, `ffmpeg` and the Kitty graphics protocol.
 
 ## So what is the Kitty graphics protocol?
 The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running in terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
@@ -43,13 +43,13 @@ The payload is the actual image data, encoded in base 64. It can be either a fil
 ```
 
 ## Handling parallel encoding and display
-Since our goal is to stream YouTube videos, we are going to need to encode and display frames simultaneously. The approach I chose to store, encode and display frames was the following:
-- Our program's state is composed of two queues: one stores the frames before we've encoded them to follow the graphics protocol, the other one stores the graphics escape codes ready to be sent to `STDOUT`;
-- One thread receives data from YouTube and stores it in the first queue;
-- A second thread pops each frame from this first queue, converts it to the graphics escape code to display, and stores it in the second queue;
-- A third thread pops the graphics escape codes from the second queue to display them at the right frame rate. 
+Since we are setting out to stream YouTube videos, we are going to want to play the video as we download it. This is how we can get a simple download -> encode -> display flow going:
+- We build two queues: a 'RGB frames queue' to store the raw RGB frames before we've encoded them to follow the graphics protocol, and a 'escape codes queue' to store the graphics escape codes ready to be sent to `STDOUT`;
+- One thread downloads data from YouTube, converts it to RGB format, and stores it in the RGB frames queue;
+- A second thread pops frames from the RGB frames queue, converts it to the graphics escape code to display, and stores it in the escape codes queue;
+- A third thread pops escape codes from the queue and sends them to `STDOUT` at the right interval to maintain the original frame rate.
 
-Since I assumed all threads would be simultaneously active with little idle time, I used Rust's `std::thread` and no async runtime. I also used mutexes to share the buffers across threads.
+We can manage the multi-threading with Rust's `std::thread` - there shouldn't be much idle time, so no need for an async runtime.
 
 The flow of data in our program should look something like this:
 
