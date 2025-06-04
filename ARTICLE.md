@@ -6,10 +6,12 @@ That is, until I read the following line in the documentation for [Ghostty](http
 
 > Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal.
 
-In this article, we will learn what the Kitty graphics protocol is, and attempt to use it to stream a YouTube video directly in the terminal.
+It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp.
 
-## What is the Kitty graphics protocol?
-The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running into terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
+In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality terminal video streaming program, using `yt-dlp`, `ffmpeg` and the Kitty graphics protocol.
+
+## So what is the Kitty graphics protocol?
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running in terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
 
 So what does that look like? The specification tells us:
 
@@ -20,20 +22,22 @@ The `<ESC>_G` prefix and the `<ESC>\` suffix are the delimiters to let the termi
 ### Control data
 The control data is a series of comma-separated key-value pairs. It includes some metadata about the image, such as its format, width or height, as well as some instructions for the terminal on how to display the image. You can find a full reference [here](https://sw.kovidgoyal.net/kitty/graphics-protocol/#control-data-reference).
 
-For instance, if we just need to display some basic RGB data, we just need the following:
+For instance, if we just need to display some basic RGB data, we can use the following control data:
 ```
 <ESC>_Gf=24,s=<image width>,v=<image height>,a=T;<payload><ESC>\
 ```
-In this example, the `f`, `s` and `v` keys are the image metadata, and `a=T` tells the terminal we want it to display the image.
+In this example, the `f`, `s` and `v` keys are the image metadata. `f=24` is for RGB format, `s` and `v` are for the image width and height respectively. `a=T` tells the terminal we want it to display the image.
 
 ### Payload
-The payload is the actual image data, encoded in base 64. It can be either a file path or the raw image data (the `t` key in the control data can be used to tell the terminal whether we're sending raw data or a file path).
+The payload is the actual image data, encoded in base 64. It can be either a file path or the raw image data. The `t` key in the control data can be used to tell the terminal whether we're sending raw data or a file path.
 
-```
+```bash
 # Sending the RGB data directly in the payload
 <ESC>_Gf=24,s=<image width>,v=<image height>,a=T,t=d;<base64_encoded_pixels><ESC>\ 
+
 # Sending the path to a file containing RGB data
 <ESC>_Gf=24,s=<image width>,v=<image height>,a=T;t=f<base64_encoded_file_path><ESC>\ 
+
 # Sending the path to a PNG file; width and height are not necessary as they will be in the PNG metadata
 <ESC>_Gf=100,a=T;t=f<base64_encoded_file_path><ESC>\ 
 ```
