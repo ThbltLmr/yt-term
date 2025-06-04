@@ -56,14 +56,14 @@ The flow of data in our program should look something like this:
 <EXCALIDRAW>
 
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
-The first step is to get the video data from YouTube into our first queue (storing frames before we've encoded them into graphics escape codes). Considering the variety of existing video formats and the complexity of the YouTube API, I cowardly decided to rely on the superior programmers at `yt-dlp` and `ffmpeg` to provide me a stream of RGB frames.
+Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the insane complexity of codecs / containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `ffmpeg` to provide me a stream of RGB frames.
 
-First, I picked a width and height for the frames I wanted to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. Therefore, I knew I was going to store chunks of 360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame. I could then:
-- start `yt-dlp` for my YouTube video of choice, selecting a 360p format and outputting the result to `STDOUT`;
+First, we need to decide on a width and height for the frames we want to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `ffmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
+- we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
 - pipe the `yt-dlp` output to `ffmpeg`;
 - kindly ask `ffmpeg` to convert the data to RGB and output it to `STDOUT`
 
-I could then read the `ffmpeg` output and store each chunk of 691kB to our first queue.
+We can then read the `ffmpeg` output, split it in 691kB chunks, and store each chunk to our RGB frames queue.
 
 <details>
 <summary>This is what the function handling this pipeline looks like</summary>
