@@ -6,7 +6,7 @@ That is, until I read the following line in the documentation for [Ghostty](http
 
 > Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal.
 
-It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp.
+It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp. All I needed was caffeine, a LLM holding my hand, and a few hundred lines of poorly written Rust code.
 
 In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol.
 
