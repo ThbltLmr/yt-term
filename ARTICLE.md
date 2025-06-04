@@ -8,7 +8,7 @@ That is, until I read the following line in the documentation for [Ghostty](http
 
 It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp.
 
-In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality terminal video streaming program in Rust, using `yt-dlp`, `ffmpeg` and the Kitty graphics protocol.
+In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol.
 
 ## So what is the Kitty graphics protocol?
 The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running in terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
@@ -56,14 +56,16 @@ The flow of data in our program should look something like this:
 <EXCALIDRAW>
 
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
-Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the insane complexity of codecs / containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `ffmpeg` to provide me a stream of RGB frames.
+Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the insane complexity of codecs / containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) is an awesome open-source project that lets us download a YouTube video (as well as many other sites) in any of the available format;
+- [FFmpeg](https://ffmpeg.org/) allows us to convert the output of `yt-dlp` to RGB format, without having to worry about encoding.
 
-First, we need to decide on a width and height for the frames we want to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `ffmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
+First, we need to decide on a width and height for the frames we want to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
 - we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
-- pipe the `yt-dlp` output to `ffmpeg`;
-- kindly ask `ffmpeg` to convert the data to RGB and output it to `STDOUT`
+- pipe the `yt-dlp` output to `FFmpeg`;
+- kindly ask `FFmpeg` to convert the data to RGB and output it to `STDOUT`
 
-We can then read the `ffmpeg` output, split it in 691kB chunks, and store each chunk to our RGB frames queue.
+We can then read the `FFmpeg` output, split it in 691kB chunks, and store each chunk to our RGB frames queue.
 
 <details>
 <summary>This is what the function handling this pipeline looks like</summary>
@@ -139,8 +141,9 @@ We can then read the `ffmpeg` output, split it in 691kB chunks, and store each c
 </details>
 
 ## Encoding frames to be diplayed
-Now that we are have a queue of RGB frames, we need to convert them to graphics escape codes matching the Kitty graphics protocol. To do so, we need some control data (which will be the same in every escape code), and we need to encode the RGB data in base64. 
-Here are the control data key-value pairs that we need:
+Now that we are have a queue of RGB frames, we need to convert them to graphics escape codes matching the Kitty graphics protocol. So we need the right control data (which will be the same in every escape code), and we need to encode the RGB data in base64. 
+
+Here are the control data key-value pairs that we need to display one of our frames, i.e. a 640x360 pixels image:
 - `f=24`: to signal that we are sending RGB data;
 - `s=640`: the height of the image;
 - `v=360`: the width of the image;
@@ -148,18 +151,17 @@ Here are the control data key-value pairs that we need:
 - `a=T`: to instruct the terminal to display the frame when received.
 
 Once we have this control data, we simply need to repeat the same few steps for each frame:
-- read the RGB data from our first queue;
+- read the RGB data from our RGB frames queue;
 - encode it in base 64 (I used the base64 crate)
 - return a slice with the encode prefix (`<ESC>_G`), our control data, the base 64 encoded data, and the suffix (`<ESC>\`)
-- store this slice in our second queue, ready for display;
+- store this slice in our escape codes queue, ready for display;
 
 <details>
-<summary>This is what my encoding class looks like</summary>
+<summary>This is what my encoding functions looks like</summary>
 
 ```rust
-fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
-    // Base64 encode the frame data
-    let encoded_payload = self.encode_rgb(frame.data);
+fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Vec<u8>) -> Vec<u8> {
+    let encoded_payload = self.encode_rgb(frame);
     let prefix = b"\x1b_G";
     let suffix = b"\x1b\\";
     let delimiter = b";";
@@ -169,8 +171,9 @@ fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
     buffer.extend_from_slice(delimiter);
     buffer.extend_from_slice(&encoded_payload);
     buffer.extend_from_slice(suffix);
-    Frame::new(buffer)
+    buffer
 }
+
 pub fn encode(&mut self) -> Res<()> {
     loop {
         let mut rgb_buffer = self.rgb_buffer.lock().unwrap();
@@ -203,6 +206,7 @@ fn encode_control_data(&self, control_data: HashMap<String, String>) -> Vec<u8> 
     }
     encoded_data.join(",").as_bytes().to_vec()
 }
+
 fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
     let encoded = general_purpose::STANDARD.encode(&rgb);
     encoded.as_bytes().to_vec()
@@ -211,7 +215,7 @@ fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
 </details>
 
 ## Managing the frame rate
-To display a frame, all we need to do is write the graphics escape code to `STDOUT`. Our `yt-dlp` + `ffmpeg` flow already gives us the frames in the right order, so we don't need to worry about ordering. We do however need to take care of frame rate. In all formats I have seen, 360p YouTube videos have a 25 FPS frame rate, meaning we have to display one frame every 1000 / 25 = 40 ms.
+To display a frame, all we need to do is write the graphics escape code to `STDOUT`. Our `yt-dlp` + `FFmpeg` flow already gives us the frames in the right order, so we don't need to worry about ordering. We do however need to take care of frame rate. In all formats I have seen, 360p YouTube videos have a 25 FPS frame rate, meaning we have to display one frame every 1000 / 25 = 40 ms.
 
 Because displaying the frame takes a non-negligible time, we can't simply make the thread sleep after each frame. Instead, we can measure the time since the last displayed frame, and only display the new one if the elapsed time since the last frame is over 40 ms.
 
@@ -325,9 +329,9 @@ fn get_terminal_size() -> std::io::Result<(u16, u16)> {
 We now have a YouTube video player, right in our terminal! How about adding sound?
 
 ## Getting audio data
-First, we need to get audio data. Luckily, we can just repeat the same `yt-dlp` - `ffmpeg` flow that we add for video, with different params. This time, instead of asking `ffmpeg` to output RGB data, we can specifiy an audio sample format. I went with a 48kHz frequency stereo format, meaning a one-second sample would be 48000 * 2 * 2 = 192 kB.
+First, we need to get audio data. Luckily, we can just repeat the same `yt-dlp` - `FFmpeg` flow that we add for video, with different params. This time, instead of asking `FFmpeg` to output RGB data, we can specifiy an audio sample format. I went with a 48kHz frequency stereo format, meaning a one-second sample would be 48000 * 2 * 2 = 192 kB.
 
-Initally, I tried setting `ffmpeg` to directly output to PulseAudio. While this did work to play the sound of the video, it would not guarantee that 1) both the audio and the video would start simultaneously, and 2) one stream will pause if the other is buffering.
+Initally, I tried setting `FFmpeg` to directly output to PulseAudio. While this did work to play the sound of the video, it would not guarantee that 1) both the audio and the video would start simultaneously, and 2) one stream will pause if the other is buffering.
 
 To fix problem 1, I replicated the queueing strategy I implemented for video, by storing the audio samples in a queue.
 
@@ -341,7 +345,7 @@ The final flow of our program now looks like this:
 
 ## Shutting down the program at the end of the video
 Finally, we need to shut down all our threads as we finish receiving, processing and outputting data. The easiest way I thought of was to create channels, that upstream threads could use to signal downstream threads when done:
-- The threads responsible for starting the `yt-dlp` and `ffmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
+- The threads responsible for starting the `yt-dlp` and `FFmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
 - The thread responsible for creating graphics escape codes shutdowns when the upstream thread is done and the RGB data queue is empty;
 - The thread that fills the 'ready to play' queue shut downs when the encoding thread is done, the audio receiving thread is done, and both of the corresponding queues are empty;
 - The overall program shutdowns when the 'ready to play' queues are done and the thread filling them is done as well.
