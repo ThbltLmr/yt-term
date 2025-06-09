@@ -46,14 +46,16 @@ The payload is the actual image data, encoded in base 64. It can be either a fil
 <ESC>_Gf=100,a=T;t=f<base64_encoded_file_path><ESC>\ 
 ```
 
-## Handling parallel encoding and display
-Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames into graphics escape codes, and then display it. We want to do this in parallel, which means we are going to need some multi-threading. This is how we can get a simple download -> encode -> display flow:
+## High-level plan
+Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames into graphics escape codes, and then display it. We want to do all this in parallel, which means we are going to need some multi-threading.
+
+We can expect that our threads will require some CPU resources at the same time: if we want to watch any video that is over a couple seconds long, we should start displaying frames while we are still downloading and encoding the next ones. For this reason, I did not see much value in using an async runtime, and simply used Rust's `std::thread`.
+
+This is how we can get a simple download -> encode -> display flow:
 - We build two queues: a 'RGB frames queue' to store the raw RGB frames before we've encoded them to follow the graphics protocol, and a 'escape codes queue' to store the graphics escape codes ready to be sent to `STDOUT`;
 - One thread downloads data from YouTube, converts it to RGB format, and stores it in the RGB frames queue;
 - A second thread pops frames from the RGB frames queue, converts it to the graphics escape code to display, and stores it in the escape codes queue;
 - A third thread pops escape codes from the queue and sends them to `STDOUT` at the right interval to maintain the original frame rate.
-
-We can manage the multi-threading with Rust's `std::thread` - there shouldn't be much idle time, so no need for an async runtime.
 
 The flow of data in our program should look something like this:
 
@@ -62,7 +64,7 @@ The flow of data in our program should look something like this:
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
 Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the complexity of codecs, containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
 
-First, we need to decide on a width and height for the frames we want to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
+First, we need to decide on a width and height for the frames we want to display. I initally tried a 720p resolution, but it seemed my program was not able to display frames at 25 FPS. The average FPS was around 15-20. So I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid these performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
 - we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
 - pipe the `yt-dlp` output to `FFmpeg`;
 - kindly ask `FFmpeg` to convert the data to RGB and output it to `STDOUT`
@@ -225,7 +227,7 @@ Because displaying the frame takes a non-negligible time, we can't simply make t
 let mut last_frame_time = std::time::instant::now();
 loop {
     // we only get a frame if over 40 ms have passed since the last one
-        if last_frame_time.elapsed() >= self.frame_interval {
+    if last_frame_time.elapsed() >= self.frame_interval {
         let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
         if let some(frame) = encoded_frame {
             last_frame_time = std::time::instant::now();
@@ -235,7 +237,9 @@ loop {
 }
 ```
 
-I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. It turned out that the operation of getting a frame and displaying it sometimes took over 40 ms, so the video would lag behind. To fix this, I added a frame skipping check: if we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one.
+I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. I added logs to different stages of the program, and realized that the loop inside the `display` sometimes took over 40 ms, so the video would lag behind. 
+
+To fix this, we can add a frame skipping check. If we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one. 
 
 <details>
 <summary>My implementation, including the frame skipping, looks like this</summary>
@@ -252,6 +256,7 @@ pub fn display(&self) -> Res<()> {
         } else if last_frame_time.elapsed() >= self.frame_interval {
             let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
             if let Some(frame) = encoded_frame {
+                // if over 42 ms have passed since the last frame, we skip the current frame
                 if total_frames_counter > 0
                     && last_frame_time.elapsed()
                         > self.frame_interval + Duration::from_millis(2)
@@ -355,5 +360,7 @@ Finally, we need to shut down all our threads as we finish receiving, processing
 ## Demo and next steps
 Here is a short demo of our terminal streaming video player:
 <DEMO>
+
+You can find the full source code [here](https://github.com/ThbltLmr/yt-term). This article covers the program as it was in [release 1.0.0](https://github.com/ThbltLmr/yt-term/releases/tag/v1.0.0).
 
 What's next? Well, as expected from a toy project, our program is currently not very efficient. In particular, we currently start 4 sub-processes: two `yt-dlp` sub-processes and two `FFmpeg` sub-processes. Our next step will be to use a single `yt-dlp` process, and handle the parsing and demultiplexing of the video data we get.
