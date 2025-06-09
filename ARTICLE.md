@@ -1,6 +1,6 @@
 # Streaming YouTube videos in the terminal with the Kitty graphics protocol
 
-Over the past few months, I have been slowly turning my terminal into my happy place: switching from VSCode to Neovim, setting up [Neomutt](https://neomutt.org/) to read my emails, even occasionally using [lynx](https://lynx.invisible-island.net/) to browse so text-heavy websites. But I was still reliant on my regular browser to watch my favorite Minecraft let's play videos and NordVPN ads.
+Over the past few months, I have been slowly turning my terminal into my happy place: switching from VSCode to Neovim, setting up [Neomutt](https://neomutt.org/) to read my emails, even occasionally using [lynx](https://lynx.invisible-island.net/) to browse some text-heavy websites. I could even find CLI clients for a lot of other common desktop apps, like Spotify or Discord. But when it came to YouTube, and video streaming in general, I was still reliant on my regular browser.
 
 That is, until I read the following line in the documentation for [Ghostty](https://ghostty.org):
 
@@ -8,7 +8,9 @@ That is, until I read the following line in the documentation for [Ghostty](http
 
 It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp. All I needed was caffeine, a LLM holding my hand, and a few hundred lines of poorly written Rust code.
 
-In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol.
+In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality, heavyweight terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol:
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) is an awesome open-source project that lets us download a YouTube video (as well as many other sites) in any of the available format;
+- [FFmpeg](https://ffmpeg.org/) allows us to convert the output of `yt-dlp` to RGB format, without having to worry about encoding.
 
 ## So what is the Kitty graphics protocol?
 The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running in terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
@@ -57,8 +59,6 @@ The flow of data in our program should look something like this:
 
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
 Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the insane complexity of codecs / containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) is an awesome open-source project that lets us download a YouTube video (as well as many other sites) in any of the available format;
-- [FFmpeg](https://ffmpeg.org/) allows us to convert the output of `yt-dlp` to RGB format, without having to worry about encoding.
 
 First, we need to decide on a width and height for the frames we want to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
 - we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
