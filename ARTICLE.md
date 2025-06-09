@@ -348,9 +348,10 @@ Finally, we need to shut down all our threads as we finish receiving, processing
 - The threads responsible for starting the `yt-dlp` and `FFmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
 - The thread responsible for creating graphics escape codes shutdowns when the upstream thread is done and the RGB data queue is empty;
 - The thread that fills the 'ready to play' queue shut downs when the encoding thread is done, the audio receiving thread is done, and both of the corresponding queues are empty;
-- The overall program shutdowns when the 'ready to play' queues are done and the thread filling them is done as well.
+- The overall program shutdowns when the 'ready to play' queues are empty and the thread filling them is done as well.
 
-## Conclusion and demo
-- screeen capture of demo
-- current memory usage
-- potential for optimization
+## Demo and next steps
+Here is a short demo of our terminal streaming video player:
+<DEMO>
+
+What's next? Well, as expected from a toy project, our program is currently not very efficient. In particular, we currently start 4 sub-processes: two `yt-dlp` sub-processes and two `FFmpeg` sub-processes. Our next step will be to use a single `yt-dlp` process, and handle the parsing and demultiplexing of the video data we get.
