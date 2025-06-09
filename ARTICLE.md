@@ -363,4 +363,9 @@ Here is a short demo of our terminal streaming video player:
 
 You can find the full source code [here](https://github.com/ThbltLmr/yt-term). This article covers the program as it was in [release 1.0.0](https://github.com/ThbltLmr/yt-term/releases/tag/v1.0.0).
 
-What's next? Well, as expected from a toy project, our program is currently not very efficient. In particular, we currently start 4 sub-processes: two `yt-dlp` sub-processes and two `FFmpeg` sub-processes. Our next step will be to use a single `yt-dlp` process, and handle the parsing and demultiplexing of the video data we get.
+Bugs and possible improvements:
+
+- As expected from a toy project, our program is currently not very efficient. In particular, we currently start 4 sub-processes: two `yt-dlp` sub-processes and two `FFmpeg` sub-processes;
+- Downloading the data from YouTube and decoding it to RGB with `FFmpeg` is much faster than our display framerate. This means that our RGB queue grows larger and larger as we download the video and haven't displayed those frames yet. As you can see on the chart below, our program's memory usage grows significantly at first, until the download is down and the display catches up. If we were to play a long enough video, we might even cause out of memory errors.
+
+<CHART>
