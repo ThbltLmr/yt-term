@@ -8,13 +8,13 @@ That is, until I read the following line in the documentation for [Ghostty](http
 
 It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp. All I needed was caffeine, a LLM holding my hand, and a few hundred lines of poorly written Rust code.
 
-In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality, heavyweight terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol:
+In this article, we'll explore how to build a feature-poor, blazingly slow, low-quality, heavyweight terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol:
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) is an awesome open-source project to download YouTube videos (as well as many other sites);
 - [FFmpeg](https://ffmpeg.org/) allows us to convert the output of `yt-dlp` to RGB format, without having to worry about the original video format;
 - The Kitty graphics protocol determines how we can display images in our terminal.
 
 ## So what is the Kitty graphics protocol?
-The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs (like the one we are going to build) to display images using RBG, RGBA or PNG format inside a terminal emulator. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs (like the one we are going to build) to display images using RBG, RGBA or PNG format inside a terminal emulator. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send graphics escape codes to `STDOUT` with the right escape characters and encoding.
 
 So what does that look like? The specification tells us that escape graphics code follow this pattern:
 
@@ -30,7 +30,7 @@ For instance, if we need to display some basic RGB data, we can use the followin
 ```
 <ESC>_Gf=24,s=<image width>,v=<image height>,a=T;<payload><ESC>\
 ```
-In this example, the `f`, `s` and `v` keys are the image metadata. `f=24` is for RGB format, `s` and `v` are for the image width and height respectively. The `a` key is the action to execute`: `a=T` tells the terminal we want it to display the image.
+In this example, the `f`, `s` and `v` keys are the image metadata. `f=24` is for RGB format, `s` and `v` are for the image width and height respectively. The `a` key is the action to execute: `a=T` tells the terminal we want it to display the image.
 
 ### Payload
 The payload is the actual image data, encoded in base 64. It can be either a file path or the raw image data. The `t` key in the control data can be used to tell the terminal whether we're sending raw data or a file path.
@@ -47,7 +47,7 @@ The payload is the actual image data, encoded in base 64. It can be either a fil
 ```
 
 ## Handling parallel encoding and display
-Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames to graphics escape codes, and then display it. We want to do this in parallel, which means we are going to need some multi-threading. This is how we can get a simple download -> encode -> display flow:
+Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames into graphics escape codes, and then display it. We want to do this in parallel, which means we are going to need some multi-threading. This is how we can get a simple download -> encode -> display flow:
 - We build two queues: a 'RGB frames queue' to store the raw RGB frames before we've encoded them to follow the graphics protocol, and a 'escape codes queue' to store the graphics escape codes ready to be sent to `STDOUT`;
 - One thread downloads data from YouTube, converts it to RGB format, and stores it in the RGB frames queue;
 - A second thread pops frames from the RGB frames queue, converts it to the graphics escape code to display, and stores it in the escape codes queue;
@@ -60,7 +60,7 @@ The flow of data in our program should look something like this:
 <EXCALIDRAW>
 
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
-Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the insane complexity of codecs / containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
+Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the complexity of codecs, containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
 
 First, we need to decide on a width and height for the frames we want to display. I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid any performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
 - we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
@@ -142,8 +142,8 @@ We can then read the `FFmpeg` output, split it in 691kB chunks, and store each c
 ```
 </details>
 
-## Encoding frames to be diplayed
-Now that we are have a queue of RGB frames, we need to convert them to graphics escape codes matching the Kitty graphics protocol. So we need the right control data (which will be the same in every escape code), and we need to encode the RGB data in base64. 
+## Encoding frames to be displayed
+Now that we have a queue of RGB frames, we need to convert them to graphics escape codes matching the Kitty graphics protocol. So we need the right control data (which will be the same in every escape code), and we need to encode the RGB data in base64. 
 
 Here are the control data key-value pairs that we need to display one of our frames, i.e. a 640x360 pixels image:
 - `f=24`: to signal that we are sending RGB data;
@@ -159,7 +159,7 @@ Once we have this control data, we simply need to repeat the same few steps for 
 - store this slice in our escape codes queue, ready for display;
 
 <details>
-<summary>This is what my encoding functions looks like</summary>
+<summary>This is what my encoding functions look like</summary>
 
 ```rust
 fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Vec<u8>) -> Vec<u8> {
@@ -235,7 +235,7 @@ loop {
 }
 ```
 
-I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. It turned out that the operation of getting a frame and displaying it something took over 40 ms, so the video would lag behind. To fix this, I added a frame skipping check: if we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one.
+I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. It turned out that the operation of getting a frame and displaying it sometimes took over 40 ms, so the video would lag behind. To fix this, I added a frame skipping check: if we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one.
 
 <details>
 <summary>My implementation, including the frame skipping, looks like this</summary>
@@ -271,9 +271,9 @@ pub fn display(&self) -> Res<()> {
 </details>
 
 ## Improving the display
-At this stage, running my program would "work". It would play the video I wanted, albeit with pretty low quality and frame rate, in my terminal. However, the video would play over my regular terminal, and I could still see my logs behind the image. I could also see my cursor on the bottom right of the image.
+At this stage, running my program would 'work'. It would play the video I wanted, albeit with pretty low quality and frame rate, in my terminal. However, the video would play over my regular terminal, and I could still see my logs behind the image. I could also see my cursor on the bottom right of the image.
 
-So I added a few display improvements to make the viewing experience slighlty more bearable.
+So I added a few display improvements to make the viewing experience slightly more bearable.
 
 First, I added an escape code right before every frame: 
 ```rust
@@ -315,7 +315,7 @@ impl Drop for ScreenGuard {
 }
 ```
 
-Finally, I wanted to center the video frame in the terminal. I used an IOCTL system call to get the terminal's windown size, and used it to add an offset in the control data that we add in the graphics escape codes.
+Finally, I wanted to center the video frame in the terminal. I used an IOCTL system call to get the terminal's window size, and used it to add an offset in the control data that we used in the graphics escape codes.
 
 ```rust
 fn get_terminal_size() -> std::io::Result<(u16, u16)> {
@@ -331,14 +331,14 @@ fn get_terminal_size() -> std::io::Result<(u16, u16)> {
 We now have a YouTube video player, right in our terminal! How about adding sound?
 
 ## Getting audio data
-First, we need to get audio data. Luckily, we can just repeat the same `yt-dlp` - `FFmpeg` flow that we add for video, with different params. This time, instead of asking `FFmpeg` to output RGB data, we can specifiy an audio sample format. I went with a 48kHz frequency stereo format, meaning a one-second sample would be 48000 * 2 * 2 = 192 kB.
+First, we need to get audio data. Luckily, we can just repeat the same `yt-dlp` - `FFmpeg` flow that we add for video, with different params. This time, instead of asking `FFmpeg` to output RGB data, we can specifiy an audio sample format. I went with a 48kHz frequency stereo format, meaning a one-second sample would be 48000 * 2 * 2 = 192 KB.
 
-Initally, I tried setting `FFmpeg` to directly output to PulseAudio. While this did work to play the sound of the video, it would not guarantee that 1) both the audio and the video would start simultaneously, and 2) one stream will pause if the other is buffering.
+Initially, I tried setting `FFmpeg` to directly output to PulseAudio. While this did work to play the sound of the video, it would not guarantee that 1) both the audio and the video would start simultaneously, and 2) one stream will pause if the other is buffering.
 
 To fix problem 1, I replicated the queueing strategy I implemented for video, by storing the audio samples in a queue.
 
 ## Synchronizing audio and video
-To fix the second issue and ensure that our audio and video stay in sync, I added an addition layer of buffer. This would be two 'ready to play' queues, in which I would move the graphics escape codes and audio samples only when one second of both is ready. Thus, both of these queues would always contain the same amount of stored content. I could then read from these queues when I needed to send data to either the terminal or audio pulse.
+To fix the second issue and ensure that our audio and video stay in sync, I added another layer of buffer. This would be two 'ready to play' queues, in which I would move the graphics escape codes and audio samples only when one second of both is ready. Thus, both of these queues would always contain the same amount of content. I could then read from these queues when I needed to send data to either the terminal or audio pulse.
 
 If either stream fell behind, both of these 'ready to play' queues would stop being filled, and both the audio and video outputs would stop and restart at the same time.
 
@@ -346,11 +346,11 @@ The final flow of our program now looks like this:
 <EXCALIDRAW>
 
 ## Shutting down the program at the end of the video
-Finally, we need to shut down all our threads as we finish receiving, processing and outputting data. The easiest way I thought of was to create channels, that upstream threads could use to signal downstream threads when done:
+Finally, we need to shut down all our threads as we finish receiving, processing and outputting data. The easiest way I thought of was to create channels that upstream threads could use to signal downstream threads when done:
 - The threads responsible for starting the `yt-dlp` and `FFmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
-- The thread responsible for creating graphics escape codes shutdowns when the upstream thread is done and the RGB data queue is empty;
-- The thread that fills the 'ready to play' queue shut downs when the encoding thread is done, the audio receiving thread is done, and both of the corresponding queues are empty;
-- The overall program shutdowns when the 'ready to play' queues are empty and the thread filling them is done as well.
+- The thread responsible for creating graphics escape codes shuts down when the upstream thread is done and the RGB data queue is empty;
+- The thread that fills the 'ready to play' queue shuts down when the encoding thread is done, the audio receiving thread is done, and both of the corresponding queues are empty;
+- The overall program shuts down when the 'ready to play' queues are empty and the thread filling them is done as well.
 
 ## Demo and next steps
 Here is a short demo of our terminal streaming video player:
