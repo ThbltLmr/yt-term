@@ -9,13 +9,14 @@ That is, until I read the following line in the documentation for [Ghostty](http
 It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp. All I needed was caffeine, a LLM holding my hand, and a few hundred lines of poorly written Rust code.
 
 In this article, we'll explore how to build a feature-poor, blazingly-slow, low-quality, heavyweight terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol:
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) is an awesome open-source project that lets us download a YouTube video (as well as many other sites) in any of the available format;
-- [FFmpeg](https://ffmpeg.org/) allows us to convert the output of `yt-dlp` to RGB format, without having to worry about encoding.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) is an awesome open-source project to download YouTube videos (as well as many other sites);
+- [FFmpeg](https://ffmpeg.org/) allows us to convert the output of `yt-dlp` to RGB format, without having to worry about the original video format;
+- The Kitty graphics protocol determines how we can display images in our terminal.
 
 ## So what is the Kitty graphics protocol?
-The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs running in terminal emulators to display images using RBG, RGBA or PNG format. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs (like the one we are going to build) to display images using RBG, RGBA or PNG format inside a terminal emulator. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send a graphics escape code to `STDOUT` with the right escape characters and encoding.
 
-So what does that look like? The specification tells us:
+So what does that look like? The specification tells us that escape graphics code follow this pattern:
 
 `<ESC>_G<control data>;<payload><ESC>\`
 
@@ -28,7 +29,7 @@ For instance, if we just need to display some basic RGB data, we can use the fol
 ```
 <ESC>_Gf=24,s=<image width>,v=<image height>,a=T;<payload><ESC>\
 ```
-In this example, the `f`, `s` and `v` keys are the image metadata. `f=24` is for RGB format, `s` and `v` are for the image width and height respectively. `a=T` tells the terminal we want it to display the image.
+In this example, the `f`, `s` and `v` keys are the image metadata. `f=24` is for RGB format, `s` and `v` are for the image width and height respectively. The `a` key is the action to execute`: `a=T` tells the terminal we want it to display the image.
 
 ### Payload
 The payload is the actual image data, encoded in base 64. It can be either a file path or the raw image data. The `t` key in the control data can be used to tell the terminal whether we're sending raw data or a file path.
