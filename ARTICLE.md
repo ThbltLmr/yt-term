@@ -25,7 +25,8 @@ The `<ESC>_G` prefix and the `<ESC>\` suffix are the delimiters to let the termi
 ### Control data
 The control data is a series of comma-separated key-value pairs. It includes some metadata about the image, such as its format, width or height, as well as some instructions for the terminal on how to display the image. You can find a full reference [here](https://sw.kovidgoyal.net/kitty/graphics-protocol/#control-data-reference).
 
-For instance, if we just need to display some basic RGB data, we can use the following control data:
+For instance, if we need to display some basic RGB data, we can use the following control data:
+
 ```
 <ESC>_Gf=24,s=<image width>,v=<image height>,a=T;<payload><ESC>\
 ```
@@ -46,7 +47,7 @@ The payload is the actual image data, encoded in base 64. It can be either a fil
 ```
 
 ## Handling parallel encoding and display
-Since we are setting out to stream YouTube videos, we are going to want to play the video as we download it. This is how we can get a simple download -> encode -> display flow going:
+Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames to graphics escape codes, and then display it. We want to do this in parallel, which means we are going to need some multi-threading. This is how we can get a simple download -> encode -> display flow:
 - We build two queues: a 'RGB frames queue' to store the raw RGB frames before we've encoded them to follow the graphics protocol, and a 'escape codes queue' to store the graphics escape codes ready to be sent to `STDOUT`;
 - One thread downloads data from YouTube, converts it to RGB format, and stores it in the RGB frames queue;
 - A second thread pops frames from the RGB frames queue, converts it to the graphics escape code to display, and stores it in the escape codes queue;
