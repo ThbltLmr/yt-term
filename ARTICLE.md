@@ -53,16 +53,16 @@ We can expect that our threads will require some CPU resources at the same time:
 
 This is how we can get a simple download -> encode -> display flow:
 - We build two queues: a 'RGB frames queue' to store the raw RGB frames before we've encoded them to follow the graphics protocol, and a 'escape codes queue' to store the graphics escape codes ready to be sent to `STDOUT`;
-- One thread downloads data from YouTube, converts it to RGB format, and stores it in the RGB frames queue;
-- A second thread pops frames from the RGB frames queue, converts it to the graphics escape code to display, and stores it in the escape codes queue;
-- A third thread pops escape codes from the queue and sends them to `STDOUT` at the right interval to maintain the original frame rate.
+- One 'download thread' fetches data from YouTube, converts it to RGB format, and stores it in the RGB frames queue (this is the thread that will use `yt-dlp` and `FFmpeg`);
+- An 'encode thread' pops frames from the RGB frames queue, converts it to the graphics escape code to display, and stores it in the escape codes queue;
+- A 'display thread' pops escape codes from the queue and sends them to `STDOUT` at the right interval to maintain the original frame rate.
 
 The flow of data in our program should look something like this:
 
 <EXCALIDRAW>
 
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
-Step one is to get our first thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the complexity of codecs, containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
+Step one is to get our download thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the complexity of codecs, containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
 
 First, we need to decide on a width and height for the frames we want to display. I initally tried a 720p resolution, but it seemed my program was not able to display frames at 25 FPS. The average FPS was around 15-20. So I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid these performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
 - we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
