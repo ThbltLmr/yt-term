@@ -67,9 +67,7 @@ impl VideoStreamer {
 
         let mut accumulated_data = Vec::new();
 
-        // 32KB chunks, chunks that yt-dlp outputs
-        let yt_dlp_chunk_size = 32768;
-        let mut read_buffer = vec![0u8; yt_dlp_chunk_size];
+        let mut read_buffer = vec![0u8; frame_size];
 
         loop {
             match ffmpeg_stdout.read(&mut read_buffer) {

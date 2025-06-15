@@ -1,231 +1,293 @@
 # Streaming YouTube videos in the terminal with the Kitty graphics protocol
 
-For decades, I have been looking for a blazingly slow, low-quality, feature-poor video player that would let me watch Minecraft Let's play videos and NordVPN ads directly in my terminal.
+Over the past few months, I have been slowly turning my terminal into my happy place: switching from VSCode to Neovim, setting up [Neomutt](https://neomutt.org/) to read my emails, even occasionally using [lynx](https://lynx.invisible-island.net/) to browse some text-heavy websites. I could even find CLI clients for a lot of other common desktop apps, like Spotify or Discord. But when it came to YouTube, and video streaming in general, I was still reliant on my regular browser.
 
-So when I saw the following line in the Ghostty documentation, I envisioned a way to make my dreams come true:
+That is, until I read the following line in the documentation for [Ghostty](https://ghostty.org):
 
-> Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal
+> Kitty graphics protocol: Ghostty supports the Kitty graphics protocol, which allows terminal applications to render images directly in the terminal.
 
-The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/) lets you display images in the terminal by sending image data (in RGB, RGBA, or PNG format) in an escape sequence, alongside properties that tell the terminal how to display the image. This means if we get a YouTube video in the form of a stream of RGB frames, we can use the protocol to display them directly in our terminal.
+It then dawned on me: if my terminal could display images, it could display video. My dream of reaching 100% terminal-dwelling time was within my grasp. All I needed was caffeine, a LLM holding my hand, and a few hundred lines of poorly written Rust code.
 
-My initial high-level plan was the following:
-- Get video data from YouTube
-- Convert it to RGB frames
-- Encode these frames according to the Kitty Graphics protocol
-- Send them to the terminal at the right interval to match the original video's framerate
-- (Optional) get audio data from YouTube and play it at the same time
+In this article, we'll explore how to build a feature-poor, blazingly slow, low-quality, heavyweight terminal video streaming program in Rust, using `yt-dlp`, `FFmpeg` and the Kitty graphics protocol:
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) is an awesome open-source project to download YouTube videos (as well as many other sites);
+- [FFmpeg](https://ffmpeg.org/) allows us to convert the output of `yt-dlp` to RGB format, without having to worry about the original video format;
+- The Kitty graphics protocol determines how we can display images in our terminal.
 
-## Getting a stream of RGB frames with yt-dlp and ffmpeg
+## So what is the Kitty graphics protocol?
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs (like the one we are going to build) to display images using RBG, RGBA or PNG format inside a terminal emulator. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All our program has to do is send graphics escape codes to `STDOUT` with the right escape characters and encoding.
 
-(Un)surprinsingly, getting the actual video data for a YouTube video is not trivial. Could it be that YouTube does not want you to watch their content in a client that they don't make money from? Fortunately, programmers much more talented than myself have already tackled this issue in the `yt-dlp` project, which lets you download YouTube videos from their url in a variety of formats (with different resolutions, framerates, encoding and so on).
+So what does that look like? The specification tells us that escape graphics code follow this pattern:
 
-Since YouTube does not have video streams directly in RGB format, we need to convert the data we get from `yt-dlp`. The easiest solution I found to do so was to pipe the `stdout` from `yt-dlp` directly into the `stdin` of `ffmpeg`. The output of `ffmpeg` then becomes a stream of RGB frames, which is exactly what we need.
+`<ESC>_G<control data>;<payload><ESC>\`
 
-```rust
-// src/video/streamer.rs
-pub fn stream(&self) -> Res<()> {
-    let frame_size = self.width * self.height * 3;
-    let mut yt_dlp_process = Command::new("yt-dlp")
-        .args([
-            "-o", // output to stdout
-            "-",
-            "--no-part",
-            "-f",
-            format!("bestvideo[height={}][width={}]", self.height, self.width).as_str(),
-            &self.url,
-        ])
-        .stderr(Stdio::null())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Could not start yt-dlp process");
-
-    let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
-
-    let mut ffmpeg_process = Command::new("ffmpeg")
-        .args(["-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
-        .stdin(Stdio::from(yt_dlp_stdout))
-        .stderr(Stdio::null())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Could not start ffmpeg process");
-        let mut ffmpeg_stdout = ffmpeg_process
-        .stdout
-        .take()
-        .expect("Failed to get ffmpeg stdout");
-    let mut accumulated_data = Vec::new();
-
-    // 32KB chunks, chunks that yt-dlp outputs
-    let yt_dlp_chunk_size = 32768;
-    let mut read_buffer = vec![0u8; yt_dlp_chunk_size];
-        loop {
-        match ffmpeg_stdout.read(&mut read_buffer) {
-            Ok(0) => {
-                self.streaming_done_tx.send(()).unwrap();
-                break;
-            }
-            Ok(bytes_read) => {
-                accumulated_data.extend_from_slice(&read_buffer[0..bytes_read]);
-                    while accumulated_data.len() >= frame_size {
-                    let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
-                    let frame = Frame::new(frame_data);
-                        self.rgb_buffer.lock().unwrap().push_el(frame);
-                }
-            }
-            Err(e) => {
-                eprintln!("Error reading from ffmpeg: {}", e);
-                break;
-            }
-        }
-    }
-    if !accumulated_data.is_empty() {
-        println!("Leftover incomplete data: {} bytes", accumulated_data.len());
-    }
-    let _ = ffmpeg_process.wait();
-    let _ = yt_dlp_process.wait();
-    Ok(())
-}
-```
-I moved this `yt-dlp` -> `ffmpeg` pipeline into its own thread, and save the resulting frames into a buffer so we can encode them to match the Kitty graphics protocol.
-
-## Encoding RBG frames for the Kitty graphics protocol
-
-The Kitty graphics protocol expects the following escape sequence to display an image.
-
-```
-<ESC>_G<control_data>;<payload><ESC>\
-```
-
-Let's break it down:
+The `<ESC>_G` prefix and the `<ESC>\` suffix are the delimiters to let the terminal know where our image data starts and ends. The two interesting parts in this sequence are the `control_data` and the `payload`.
 
 ### Control data
+The control data is a series of comma-separated key-value pairs. It includes some metadata about the image, such as its format, width or height, as well as some instructions for the terminal on how to display the image. You can find a full reference [here](https://sw.kovidgoyal.net/kitty/graphics-protocol/#control-data-reference).
 
-Before sending the terminal some image data, we need to provide it with more information about the image and its properties. That's the role of the control data, which is a series of key-value pairs. You can find a full reference [here](https://sw.kovidgoyal.net/kitty/graphics-protocol/#control-data-reference). For our use case, all we need are the following:
+For instance, if we need to display some basic RGB data, we can use the following control data:
 
-`f=24,s={image width},v={image height},t=d,a=T`
-
-This will tell the terminal to expect RGB data (`f=24`) directly encoded in the payload (`t=d`) and to display it instantly (`a=T`), alongside the image dimensions.
-
-My function to handle control data looks like this: 
-
-```rust
-fn encode_control_data(&self, control_data: HashMap<String, String>) -> Vec<u8> {
-    let mut encoded_data = Vec::new();
-    for (key, value) in control_data {
-        encoded_data.push(format!("{}={}", key, value));
-    }
-
-    encoded_data.join(",").as_bytes().to_vec()
-}
 ```
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T;<payload><ESC>\
+```
+In this example, the `f`, `s` and `v` keys are the image metadata. `f=24` is for RGB format, `s` and `v` are for the image width and height respectively. The `a` key is the action to execute: `a=T` tells the terminal we want it to display the image.
 
 ### Payload
+The payload is the actual image data, encoded in base 64. It can be either a file path or the raw image data. The `t` key in the control data can be used to tell the terminal whether we're sending raw data or a file path.
 
-The payload itself is simply the RBG data, encoded in base 64:
+```bash
+# Sending the RGB data directly in the payload
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T,t=d;<base64_encoded_pixels><ESC>\ 
 
-```rust
-fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
-    let encoded = general_purpose::STANDARD.encode(&rgb);
-    encoded.as_bytes().to_vec()
-}
+# Sending the path to a file containing RGB data
+<ESC>_Gf=24,s=<image width>,v=<image height>,a=T;t=f<base64_encoded_file_path><ESC>\ 
+
+# Sending the path to a PNG file; width and height are not necessary as they will be in the PNG metadata
+<ESC>_Gf=100,a=T;t=f<base64_encoded_file_path><ESC>\ 
 ```
 
-Once we add in the start and end escape characters, we get a string matching the protocol, ready for display
+## High-level plan
+Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames into graphics escape codes, and then display it. We want to do all this in parallel, which means we are going to need some multi-threading (a hard concept to grasp for my smooth Typescript brain).
+
+We can expect that our threads will require some CPU resources at the same time: if we want to watch any video that is over a couple seconds long, we should start displaying frames while we are still downloading and encoding the next ones. For this reason, I did not see much value in using an async runtime, and simply used Rust's `std::thread`.
+
+This is how we can get a simple download -> encode -> display flow:
+- We build two queues: a 'RGB frames queue' to store the raw RGB frames before we've encoded them to follow the graphics protocol, and a 'escape codes queue' to store the graphics escape codes ready to be sent to `STDOUT`;
+- One 'download thread' fetches data from YouTube, converts it to RGB format, and stores it in the RGB frames queue (this is the thread that will use `yt-dlp` and `FFmpeg`);
+- An 'encode thread' pops frames from the RGB frames queue, converts it to the graphics escape code to display, and stores it in the escape codes queue;
+- A 'display thread' pops escape codes from the queue and sends them to `STDOUT` at the right interval to maintain the original frame rate.
+
+The flow of data in our program should look something like this:
+
+<EXCALIDRAW>
+
+## Getting video data for a YouTube video with yt-dlp and ffmpeg
+Step one is to get our download thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the complexity of codecs, containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
+
+First, we need to decide on a width and height for the frames we want to display. I initally tried a 720p resolution, but it seemed my program was not able to display  720p frames at 25 FPS. The average FPS was around 15-20. So I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid these performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
+- we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
+- pipe the `yt-dlp` output to `FFmpeg`;
+- kindly ask `FFmpeg` to convert the data to RGB and output it to `STDOUT`
+
+We can then read the `FFmpeg` output, split it in 691kB chunks, and store each chunk to our RGB frames queue.
+
+<details>
+<summary>This is what the function handling this pipeline looks like</summary>
 
 ```rust
-fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Frame) -> Frame {
-    let encoded_payload = self.encode_rgb(frame.data);
+    pub fn stream(&self) -> Res<()> {
+        let frame_size = self.width * self.height * 3;
+        let mut yt_dlp_process = Command::new("yt-dlp")
+            .args([
+                "-o",
+                "-",
+                "--no-part",
+                "-f",
+                format!("bestvideo[height={}][width={}]", self.height, self.width).as_str(),
+                &self.url,
+            ])
+            .stderr(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Could not start yt-dlp process");
+
+        let yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
+
+        let mut ffmpeg_process = Command::new("ffmpeg")
+            .args(["-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+            .stdin(Stdio::from(yt_dlp_stdout))
+            .stderr(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Could not start ffmpeg process");
+
+        let mut ffmpeg_stdout = ffmpeg_process
+            .stdout
+            .take()
+            .expect("Failed to get ffmpeg stdout");
+
+        let mut accumulated_data = Vec::new();
+
+        let mut read_buffer = vec![0u8; frame_size];
+
+        loop {
+            match ffmpeg_stdout.read(&mut read_buffer) {
+                Ok(0) => {
+                    self.streaming_done_tx.send(()).unwrap();
+                    break;
+                }
+                Ok(bytes_read) => {
+                    accumulated_data.extend_from_slice(&read_buffer[0..bytes_read]);
+
+                    while accumulated_data.len() >= frame_size {
+                        let frame_data = accumulated_data.drain(0..frame_size).collect::<Vec<u8>>();
+                        let frame = Frame::new(frame_data);
+
+                        self.rgb_buffer.lock().unwrap().push_el(frame);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error reading from ffmpeg: {}", e);
+                    break;
+                }
+            }
+        }
+
+        if !accumulated_data.is_empty() {
+            println!("Leftover incomplete data: {} bytes", accumulated_data.len());
+        }
+
+        let _ = ffmpeg_process.wait();
+        let _ = yt_dlp_process.wait();
+        Ok(())
+    }
+```
+</details>
+
+## Encoding frames to be displayed
+Now that we have a queue of RGB frames, we need  our encode thread to convert them to graphics escape codes matching the Kitty graphics protocol. So we need the right control data (which will be the same in every escape code), and we need to encode the RGB data  of each frame in base64. 
+
+Here are the control data key-value pairs that we need to display one of our frames, i.e. a 640x360 pixels image:
+- `f=24`: to signal that we are sending RGB data;
+- `s=640`: the height of the image;
+- `v=360`: the width of the image;
+- `t=d`: to signal that the image data will be directly in the payload;
+- `a=T`: to instruct the terminal to display the frame when received.
+
+Once we have this control data, we simply need to repeat the same few steps for each frame:
+- read the RGB data from our RGB frames queue;
+- encode it in base 64 (I used the base64 crate)
+- return a slice with the encode prefix (`<ESC>_G`), our control data, the base 64 encoded data, and the suffix (`<ESC>\`)
+- store this slice in our escape codes queue, ready for display;
+
+<details>
+<summary>This is what my encoding functions look like</summary>
+
+```rust
+fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Vec<u8>) -> Vec<u8> {
+    let encoded_payload = self.encode_rgb(frame);
     let prefix = b"\x1b_G";
     let suffix = b"\x1b\\";
     let delimiter = b";";
     let mut buffer = vec![];
-
     buffer.extend_from_slice(prefix);
     buffer.extend_from_slice(&encoded_control_data);
     buffer.extend_from_slice(delimiter);
     buffer.extend_from_slice(&encoded_payload);
     buffer.extend_from_slice(suffix);
+    buffer
+}
 
-    Frame::new(buffer)
+pub fn encode(&mut self) -> Res<()> {
+    loop {
+        let mut rgb_buffer = self.rgb_buffer.lock().unwrap();
+        let x_offset = (self.term_width as usize - self.width) / 2;
+        let y_offset = (self.term_height as usize - self.height) / 2;
+        let encoded_control_data = self.encode_control_data(HashMap::from([
+            ("f".into(), "24".into()),
+            ("s".into(), format!("{}", self.width)),
+            ("v".into(), format!("{}", self.height)),
+            ("t".into(), "d".into()),
+            ("a".into(), "T".into()),
+            ("X".into(), format!("{}", x_offset)),
+            ("Y".into(), format!("{}", y_offset)),
+        ]));
+        let frame = rgb_buffer.get_el();
+        if let Some(frame) = frame {
+            let encoded_frame = self.encode_frame(encoded_control_data, frame);
+            let mut encoded_buffer = self.encoded_buffer.lock().unwrap();
+            encoded_buffer.push_el(encoded_frame);
+        } else if self.streaming_done_rx.try_recv().is_ok() {
+            self.encoding_done_tx.send(()).unwrap();
+            return Ok(());
+        }
+    }
+}
+fn encode_control_data(&self, control_data: HashMap<String, String>) -> Vec<u8> {
+    let mut encoded_data = Vec::new();
+    for (key, value) in control_data {
+        encoded_data.push(format!("{}={}", key, value));
+    }
+    encoded_data.join(",").as_bytes().to_vec()
+}
+
+fn encode_rgb(&self, rgb: Vec<u8>) -> Vec<u8> {
+    let encoded = general_purpose::STANDARD.encode(&rgb);
+    encoded.as_bytes().to_vec()
 }
 ```
+</details>
 
-I set up a dedicated thread to read from the RBG frames buffer, and save our Kitty graphics protocol ready frames into a new buffer.
+## Managing the frame rate
+To display a frame, all we need to do is write the graphics escape code to `STDOUT`. Our `yt-dlp` + `FFmpeg` flow already gives us the frames in the right order, so we don't need to worry about ordering. We do however need to take care of frame rate. In all formats I have seen, 360p YouTube videos have a 25 FPS frame rate, meaning we have to display one frame every 1000 / 25 = 40 ms.
 
----
-- Read about the protocol in Ghostty docs- Missing link: the one part of my usual workflow missing from terminal applications is YouTube
-- Getting RGB frames from YouTube with yt-dlp and ffmpeg
-- Displaying RBG frames with the protocol (control data and base 64 encoding)- Storing RBG and encoding frames in queues
-- Handling framerate (40 ms intervals + skipping frames to maintain fps)
-- Display improvements
-- Audio samples intro- Getting audio samples from yt-dlp and ffmpeg
-- Outputting the audio to PulseAudio
-- Syncing audio and video with ready queues
-
-- Shutdown with channels
-
-
-### The Kitty graphics protocol
-The Kitty graphics protocol allows you to send images to the terminal, which can then be displayed in a terminal window.
-Images can be sent in three different formats: RGB, RGBA, and PNG. They can be sent to the terminal with a specific escape sequence:
-```
-<ESC>_G<control_data>;<base64_encoded_image_or_image_path><ESC>\
-```
-Where the `control_data` is a string of comma-separated key-value pairs that specify the image format, width, height, and other properties. The `base64_encoded_image_or_image_path` is the image data or a path to an image file encoded in base64.
-
-I chose to use the RGB format as it is the most straightfoward to implement. By default, I also chose to use a 640x360 resolution, which is high enough for most videos to be watchable and low enough to not cause performance issues.
-
-Other properties needed in the `control_data` are the action we want to perform (in this case, display the image), and the transmission medium (which indicates where the image is coming from - in this case, the data is directly encoded in the escape code).
+Because displaying the frame takes a non-negligible time, we can't simply make the thread sleep after each frame. Instead, we can measure the time since the last displayed frame, and only display the new one if the elapsed time since the last frame is over 40 ms.
 
 ```rust
-let encoded_control_data = self.encode_control_data(HashMap::from([
-    ("f".into(), "24".into()), // RGB format
-    ("s".into(), format!("{}", self.width).into()), // image width
-    ("v".into(), format!("{}", self.height).into()), // image height
-    ("t".into(), "d".into()), // transmission medium
-    ("a".into(), "T".into()), // action to perform (T for display)
-    ("X".into(), format!("{}", x_offset).into()), // x offset to center the image
-    ("Y".into(), format!("{}", y_offset).into()), // y offset to center the image
-]));
-```
-
-### Getting RGB frames for a video
-To get a stream of RGB frames from a video, we use a combination of `yt-dlp` and `ffmpeg`.
-
-We start `yt-dlp` to extract the video stream, with the right width and height, and set it up to output to `stdout`. We can then pipe it to `ffmpeg`'s `stdin`, which will decode the video and convert it to RGB frames.
-
-We then store these RGB frames in a first buffer, from which we can read to encode them to the Kitty graphics protocol and store them in a second queue.
-
-### Displaying the frames in the terminal
-To display the video frames in the terminal, we need to read from the second queue, and send the encoded frames to the terminal at the right time.
-Most YouTube videos in 360p have a frame rate of 25 FPS, meaning that we need to send a frame every 40 milliseconds.
-
-```rust
-if last_frame_time.elapsed() >= self.frame_interval {
-    let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
-    if let Some(frame) = encoded_frame {
-        last_frame_time = std::time::Instant::now();
-        self.display_frame(frame)?;
+let mut last_frame_time = std::time::instant::now();
+loop {
+    // we only get a frame if over 40 ms have passed since the last one
+    if last_frame_time.elapsed() >= self.frame_interval {
+        let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+        if let some(frame) = encoded_frame {
+            last_frame_time = std::time::instant::now();
+            self.display_frame(frame)?;
+        }
     }
 }
 ```
 
-Another important aspect is to clear the terminal before each frame. We can achieve this by sending a corresponding escape sequence before each frame.
+I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. I added logs to different stages of the program, and realized that the loop inside the `display` sometimes took over 40 ms, so the video would lag behind. 
+
+To fix this, we can add a frame skipping check. If we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one. This is a bit of a hacky fix, but this is my project and I say it's fine.
+
+<details>
+<summary>My implementation, including the frame skipping, looks like this</summary>
 
 ```rust
-fn display_frame(&self, frame: Frame) -> Res<()> {
-    let mut stdout = io::stdout();
-    let reset_cursor = b"\x1B[H";
-    let mut buffer = vec![];
-    buffer.extend_from_slice(reset_cursor);
-    buffer.extend_from_slice(&frame.data);
-    stdout.write_all(&buffer)?;
-    stdout.flush()?;
-    Ok(())
+pub fn display(&self) -> Res<()> {
+    let mut last_frame_time = std::time::Instant::now();
+    let mut total_frames_counter = 0;
+    loop {
+        if self.encoded_buffer.lock().unwrap().len() == 0 {
+            if self.video_queueing_done_rx.try_recv().is_ok() {
+                return Ok(());
+            }
+        } else if last_frame_time.elapsed() >= self.frame_interval {
+            let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
+            if let Some(frame) = encoded_frame {
+                // if over 42 ms have passed since the last frame, we skip the current frame
+                if total_frames_counter > 0
+                    && last_frame_time.elapsed()
+                        > self.frame_interval + Duration::from_millis(2)
+                {
+                    last_frame_time += self.frame_interval;
+                    total_frames_counter += 1;
+                    continue;
+                }
+                last_frame_time = std::time::Instant::now();
+                total_frames_counter += 1;
+                self.display_frame(frame)?;
+            }
+        }
+    }
 }
 ```
+</details>
 
-Finally, to avoid overlapping the frames with logs from the program (or any other processes), we can use an alternate screen. The `ScreenGuard` struct does this by switching to the alternate screen when it is created and switching back to the main screen when it is dropped.
+## Improving the display
+At this stage, running my program would 'work'. It would play the video I wanted, albeit with pretty low quality and frame rate, in my terminal. However, the video would play over my regular terminal, and I could still see my logs behind the image. I could also see my cursor on the bottom right of the image.
 
+So I added a few display improvements to make the viewing experience slightly more bearable.
+
+First, I added an escape code right before every frame: 
+```rust
+let reset_cursor = b"\x1B[H";
+```
+
+Sending this before every frame ensure my cursor was always at the top left, which also helped keep frame positioning consistent.
+
+Second, I moved the video to the terminal's alternate screen, so it wouldn't conflict with logs. To make sure that the alternate screen would be toggled at the start of the program and reset at the end, I added a dedicated `ScreenGuard` struct, which starts the alternate screen when created and resets it when dropped. I could then create an instance of the struct at the beginning of `main`, and be sure that it would be dropped at the end of the function.
 ```rust
 pub struct ScreenGuard {}
 
@@ -258,60 +320,53 @@ impl Drop for ScreenGuard {
 }
 ```
 
-### Frame rate
-Since we aim for 25 FPS, we need to ensure that we send a frame every 40 milliseconds. This is done by checking the elapsed time since the last frame was sent and only sending a new frame if enough time has passed.
+Finally, I wanted to center the video frame in the terminal. Following the Kitty graphics protocol documentation, I used an IOCTL system call to get the terminal's window size, and used it to add an offset in the control data that we used in the graphics escape codes.
 
 ```rust
-if last_frame_time.elapsed() >= self.frame_interval {
-    let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
-    if let Some(frame) = encoded_frame {
-        last_frame_time = std::time::Instant::now();
-        self.display_frame(frame)?;
+// I would like to thank Claude for writing this function for me
+fn get_terminal_size() -> std::io::Result<(u16, u16)> {
+    let mut winsize: libc::winsize = unsafe { mem::zeroed() };
+    let result = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) };
+    if result == -1 {
+        return Err(std::io::Error::last_os_error());
     }
-}
-```
-I ran into issues where the frame would take 50-60 ms to display, which would cause the frame rate to drop around 20 FPS. To mitigate this, we can check that the elapsed time since last frame is not too much greater than 40 ms, and if it is, we can skip the frame to avoid lagging behind.
-
-This makes the video playback a bit choppy, but it ensures that we don't fall too far behind the video stream.
-
-
-```rust
-if last_frame_time.elapsed() >= self.frame_interval {
-    let encoded_frame = self.encoded_buffer.lock().unwrap().get_el();
-    if let Some(frame) = encoded_frame {
-        if total_frames_counter > 0
-            && last_frame_time.elapsed()
-                > self.frame_interval + Duration::from_millis(2) // If there was over 42 ms since the last frame, we skip this frame
-        {
-            last_frame_time += self.frame_interval;
-            total_frames_counter += 1;
-            continue;
-        }
-
-        last_frame_time = std::time::Instant::now();
-        total_frames_counter += 1;
-        self.display_frame(frame)?;
-    }
+    Ok((winsize.ws_xpixel, winsize.ws_ypixel))
 }
 ```
 
-### Adding audio
-To add audio capabilities, similar to video, we use `yt-dlp` and `ffmpeg`. `yt-dlp` extracts the best audio stream from the given URL, and `ffmpeg` transcodes it into a raw audio format: 16-bit signed little-endian (s16le), 2 channels (stereo), and a 48kHz sample rate. This raw audio data is then streamed into an `audio_buffer`, which is a `RingBuffer<Sample>`.
+We now have a YouTube video player, right in our terminal! How about adding sound?
 
-For playback, we leverage `simple-pulse`, a Rust wrapper for PulseAudio. An `AudioAdapter` is responsible for reading `Sample`s from the `audio_buffer` and playing them through PulseAudio at the appropriate `sample_interval` (which is 1000ms / 48000 samples/sec = 20.83 microseconds per sample, but effectively we process them in chunks).
+## Getting audio data
+First, we need to get audio data. Luckily, we can just repeat the same `yt-dlp` - `FFmpeg` flow that we add for video, with different params. This time, instead of asking `FFmpeg` to output RGB data, we can specifiy an audio sample format. I went with a 48kHz frequency stereo format, meaning a one-second sample would be 48000 * 2 * 2 = 192 KB.
 
-### Synchronizing audio and video with 'ready for display' queues
-To ensure that audio and video playback remain synchronized, we introduce a queuing mechanism. Raw video frames are initially stored in `raw_video_buffer` and then encoded video frames (Kitty graphics protocol) are stored in `encoded_video_buffer`. Similarly, raw audio samples are stored in `audio_buffer`.
+Initially, I tried setting `FFmpeg` to directly output to PulseAudio. While this did work to play the sound of the video, it would not guarantee that 1) both the audio and the video would start simultaneously, and 2) one stream will pause if the other is buffering.
 
-However, the `AudioAdapter` and `TerminalAdapter` (for video display) do not directly consume from these initial buffers. Instead, we have two intermediary "ready for display" queues: `ready_audio_buffer` and `ready_video_buffer`.
+To fix problem 1, I replicated the queueing strategy I implemented for video, by storing the audio samples in a queue.
 
-The main loop constantly monitors the `audio_buffer` and `encoded_video_buffer`. It waits until both of these buffers have accumulated at least one second's worth of data. Once this condition is met (checked via `has_one_second_ready()` on the `RingBuffer`s), one second of data is atomically moved from `audio_buffer` into `ready_audio_buffer` and from `encoded_video_buffer` into `ready_video_buffer` (using `queue_one_second_into()`).
+## Synchronizing audio and video
+To fix the second issue and ensure that our audio and video stay in sync, I added another layer of buffer. This would be two 'ready to play' queues, in which I would move the graphics escape codes and audio samples only when one second of both is ready. Thus, both of these queues would always contain the same amount (i.e. the same number of seconds) of content. I could then read from these queues when I needed to send data to either the terminal or audio pulse.
 
-Both the `AudioAdapter` and `TerminalAdapter` then read and play/display content from their respective `ready_` buffers. This ensures that audio and video are processed and presented in synchronized one-second chunks, preventing one stream from lagging significantly behind the other.
+If either stream fell behind, both of these 'ready to play' queues would stop being filled, and both the audio and video outputs would stop and restart at the same time.
 
-This strategy allows us to maintain a consistent playback experience, even if there are slight variations in the processing speed of audio and video streams.
+The final flow of our program now looks like this:
+<EXCALIDRAW>
 
-### Shutdown and cleanup
-To ensure that resources are properly released and the terminal is reset to its original state, we implement a graceful shutdown mechanism.
+## Shutting down the program at the end of the video
+Finally, we need to shut down all our threads as we finish receiving, processing and outputting data. The easiest way I thought of was to create channels that upstream threads could use to signal downstream threads when done:
+- The download threads responsible for starting the `yt-dlp` and `FFmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
+- The thread responsible for creating graphics escape codes shuts down when the upstream thread is done and the RGB data queue is empty (meaning all frames have been encoded into graphics escape codes);
+- The thread that fills the 'ready to play' queue shuts down when the encoding thread is done, the audio receiving thread is done, and both of the corresponding queues are empty;
+- The overall program shuts down when the 'ready to play' queues are empty and the thread filling them is done as well.
 
-This is done by using channels so each thread can signal to downstrean thread that it is done processing. The main thread waits for all threads to finish before exiting.
+## Demo and next steps
+Here is a short demo of our terminal streaming video player:
+<DEMO>
+
+You can find the full source code [here](https://github.com/ThbltLmr/yt-term). This article covers the program as it was in [release 1.0.0](https://github.com/ThbltLmr/yt-term/releases/tag/v1.0.0).
+
+Bugs and possible improvements:
+
+- As expected from a toy project, our program is currently not very efficient. In particular, we currently start 4 sub-processes: two `yt-dlp` sub-processes and two `FFmpeg` sub-processes;
+- Downloading the data from YouTube and decoding it to RGB with `FFmpeg` is much faster than our display framerate. This means that our RGB queue grows larger and larger as we download the video and haven't displayed those frames yet. As you can see on the chart below, our program's memory usage grows significantly at first, until the download is down and the display catches up. If we were to play a long enough video, we might even cause out of memory errors.
+
+<CHART>
