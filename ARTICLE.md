@@ -64,7 +64,7 @@ The flow of data in our program should look something like this:
 ## Getting video data for a YouTube video with yt-dlp and ffmpeg
 Step one is to get our download thread to download data from YouTube, and store it in RGB format in the RGB frames queue. Considering the variety of existing video formats, the complexity of codecs, containers and of the YouTube API, I personally cowardly decided to rely on the superior programmers at `yt-dlp` and `FFmpeg` to provide me a stream of RGB frames.
 
-First, we need to decide on a width and height for the frames we want to display. I initally tried a 720p resolution, but it seemed my program was not able to display frames at 25 FPS. The average FPS was around 15-20. So I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid these performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
+First, we need to decide on a width and height for the frames we want to display. I initally tried a 720p resolution, but it seemed my program was not able to display  720p frames at 25 FPS. The average FPS was around 15-20. So I pretended it was 2010 and went with 360p (i.e. 360 * 640), to avoid these performance issues. We can then know the size of each RGB frame (360 * 640 * 3 bytes per pixel = 691200 bytes of RGB data per frame in my case). Then, we can set up `yt-dlp` and `FFmpeg` piped together to provide us with a stream of RGB frames downloaded from YouTube:
 - we start `yt-dlp` for our favorite video, selecting a 360p format and outputting the result to `STDOUT`;
 - pipe the `yt-dlp` output to `FFmpeg`;
 - kindly ask `FFmpeg` to convert the data to RGB and output it to `STDOUT`
@@ -145,7 +145,7 @@ We can then read the `FFmpeg` output, split it in 691kB chunks, and store each c
 </details>
 
 ## Encoding frames to be displayed
-Now that we have a queue of RGB frames, we need to convert them to graphics escape codes matching the Kitty graphics protocol. So we need the right control data (which will be the same in every escape code), and we need to encode the RGB data in base64. 
+Now that we have a queue of RGB frames, we need  our encode thread to convert them to graphics escape codes matching the Kitty graphics protocol. So we need the right control data (which will be the same in every escape code), and we need to encode the RGB data  of each frame in base64. 
 
 Here are the control data key-value pairs that we need to display one of our frames, i.e. a 640x360 pixels image:
 - `f=24`: to signal that we are sending RGB data;
@@ -239,7 +239,7 @@ loop {
 
 I initially thought this would be enough, but I ended up running into a bug where the frame rate would drop significantly below 25 fps. I added logs to different stages of the program, and realized that the loop inside the `display` sometimes took over 40 ms, so the video would lag behind. 
 
-To fix this, we can add a frame skipping check. If we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one. 
+To fix this, we can add a frame skipping check. If we read a frame and the last frame was displayed over 42 ms ago, we skip the current frame and move on to the next one. This is a bit of a hacky fix, but this is my project and I say it's fine.
 
 <details>
 <summary>My implementation, including the frame skipping, looks like this</summary>
@@ -320,9 +320,10 @@ impl Drop for ScreenGuard {
 }
 ```
 
-Finally, I wanted to center the video frame in the terminal. I used an IOCTL system call to get the terminal's window size, and used it to add an offset in the control data that we used in the graphics escape codes.
+Finally, I wanted to center the video frame in the terminal. Following the Kitty graphics protocol documentation, I used an IOCTL system call to get the terminal's window size, and used it to add an offset in the control data that we used in the graphics escape codes.
 
 ```rust
+// I would like to thank Claude for writing this function for me
 fn get_terminal_size() -> std::io::Result<(u16, u16)> {
     let mut winsize: libc::winsize = unsafe { mem::zeroed() };
     let result = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) };
@@ -343,7 +344,7 @@ Initially, I tried setting `FFmpeg` to directly output to PulseAudio. While this
 To fix problem 1, I replicated the queueing strategy I implemented for video, by storing the audio samples in a queue.
 
 ## Synchronizing audio and video
-To fix the second issue and ensure that our audio and video stay in sync, I added another layer of buffer. This would be two 'ready to play' queues, in which I would move the graphics escape codes and audio samples only when one second of both is ready. Thus, both of these queues would always contain the same amount of content. I could then read from these queues when I needed to send data to either the terminal or audio pulse.
+To fix the second issue and ensure that our audio and video stay in sync, I added another layer of buffer. This would be two 'ready to play' queues, in which I would move the graphics escape codes and audio samples only when one second of both is ready. Thus, both of these queues would always contain the same amount (i.e. the same number of seconds) of content. I could then read from these queues when I needed to send data to either the terminal or audio pulse.
 
 If either stream fell behind, both of these 'ready to play' queues would stop being filled, and both the audio and video outputs would stop and restart at the same time.
 
@@ -352,8 +353,8 @@ The final flow of our program now looks like this:
 
 ## Shutting down the program at the end of the video
 Finally, we need to shut down all our threads as we finish receiving, processing and outputting data. The easiest way I thought of was to create channels that upstream threads could use to signal downstream threads when done:
-- The threads responsible for starting the `yt-dlp` and `FFmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
-- The thread responsible for creating graphics escape codes shuts down when the upstream thread is done and the RGB data queue is empty;
+- The download threads responsible for starting the `yt-dlp` and `FFmpeg` processes signal they're done when both subprocesses are done and they've stored the leftover data in the first queues;
+- The thread responsible for creating graphics escape codes shuts down when the upstream thread is done and the RGB data queue is empty (meaning all frames have been encoded into graphics escape codes);
 - The thread that fills the 'ready to play' queue shuts down when the encoding thread is done, the audio receiving thread is done, and both of the corresponding queues are empty;
 - The overall program shuts down when the 'ready to play' queues are empty and the thread filling them is done as well.
 
