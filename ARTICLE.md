@@ -14,7 +14,7 @@ In this article, we'll explore how to build a feature-poor, blazingly slow, low-
 - The Kitty graphics protocol determines how we can display images in our terminal.
 
 ## So what is the Kitty graphics protocol?
-The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs (like the one we are going to build) to display images using RBG, RGBA or PNG format inside a terminal emulator. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All the client program has to do is send graphics escape codes to `STDOUT` with the right escape characters and encoding.
+The [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol) is a specification allowing client programs (like the one we are going to build) to display images using RBG, RGBA or PNG format inside a terminal emulator. While initially developed for [Kitty](https://sw.kovidgoyal.net/kitty/), it has been implemented in other terminals like Ghostty and WezTerm. All our program has to do is send graphics escape codes to `STDOUT` with the right escape characters and encoding.
 
 So what does that look like? The specification tells us that escape graphics code follow this pattern:
 
@@ -47,7 +47,7 @@ The payload is the actual image data, encoded in base 64. It can be either a fil
 ```
 
 ## High-level plan
-Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames into graphics escape codes, and then display it. We want to do all this in parallel, which means we are going to need some multi-threading.
+Since we are setting out to *stream* YouTube videos, we don't want to download a video, then encode all its frames into graphics escape codes, and then display it. We want to do all this in parallel, which means we are going to need some multi-threading (a hard concept to grasp for my smooth Typescript brain).
 
 We can expect that our threads will require some CPU resources at the same time: if we want to watch any video that is over a couple seconds long, we should start displaying frames while we are still downloading and encoding the next ones. For this reason, I did not see much value in using an async runtime, and simply used Rust's `std::thread`.
 
