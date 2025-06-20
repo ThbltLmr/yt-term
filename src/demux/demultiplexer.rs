@@ -17,7 +17,7 @@ pub struct Demultiplexer {
 }
 
 impl Demultiplexer {
-    fn demux() {
+    fn demux(&self) {
         let mut yt_dlp_process = Command::new("yt-dlp")
             .args([
                 "-o",
@@ -128,5 +128,7 @@ impl Demultiplexer {
                 }
             }
         }
+
+        self.demultiplexing_done_tx.send(()).unwrap();
     }
 }
