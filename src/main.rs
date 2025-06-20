@@ -17,6 +17,12 @@ mod audio {
     pub mod streamer;
 }
 
+mod demux {
+    pub mod demultiplexer;
+    mod moov;
+    mod sample_data;
+}
+
 use std::{
     sync::{mpsc::channel, Arc, Mutex},
     thread,
