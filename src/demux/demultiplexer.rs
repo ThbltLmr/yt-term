@@ -1,117 +1,131 @@
 use std::io::Read;
 use std::process::{Command, Stdio};
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 use std::usize;
 
 use crate::demux::moov::{parse_moov, FTYPBox};
 
 use crate::demux::sample_data::extract_sample_data;
+use crate::helpers::structs::ContentQueue;
+use crate::helpers::types::Bytes;
 
-fn demux() {
-    let mut yt_dlp_process = Command::new("yt-dlp")
-        .args([
-            "-o",
-            "-",
-            "--no-part",
-            "-f",
-            "18",
-            "https://www.youtube.com/watch?v=kFsXTaoP2A4",
-        ])
-        .stderr(Stdio::null())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Could not start yt-dlp process");
+pub struct Demultiplexer {
+    pub rgb_frames_queue: Arc<Mutex<ContentQueue<Bytes>>>,
+    pub audio_samples_queue: Arc<Mutex<ContentQueue<Bytes>>>,
+    pub demultiplexing_done_tx: Sender<()>,
+}
 
-    let mut yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
+impl Demultiplexer {
+    fn demux() {
+        let mut yt_dlp_process = Command::new("yt-dlp")
+            .args([
+                "-o",
+                "-",
+                "--no-part",
+                "-f",
+                "18",
+                "https://www.youtube.com/watch?v=kFsXTaoP2A4",
+            ])
+            .stderr(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Could not start yt-dlp process");
 
-    let mut buffer = vec![0; 1000000];
+        let mut yt_dlp_stdout = yt_dlp_process.stdout.take().unwrap();
 
-    let mut accumulated_data: Vec<u8> = vec![];
+        let mut buffer = vec![0; 1000000];
 
-    let mut ftyp_box = None;
-    let mut moov_box = None;
-    let mut sample_data = None;
+        let mut accumulated_data: Vec<u8> = vec![];
 
-    loop {
-        match yt_dlp_stdout.read(&mut buffer) {
-            Ok(0) => break,
-            Ok(bytes_read) => {
-                accumulated_data.extend_from_slice(&buffer[..bytes_read]);
+        let mut ftyp_box = None;
+        let mut moov_box = None;
+        let mut sample_data = None;
 
-                while accumulated_data.len() >= 8 {
-                    let box_size_bytes: [u8; 4] = [
-                        accumulated_data[0],
-                        accumulated_data[1],
-                        accumulated_data[2],
-                        accumulated_data[3],
-                    ];
+        loop {
+            match yt_dlp_stdout.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(bytes_read) => {
+                    accumulated_data.extend_from_slice(&buffer[..bytes_read]);
 
-                    let box_size = u32::from_be_bytes(box_size_bytes);
+                    while accumulated_data.len() >= 8 {
+                        let box_size_bytes: [u8; 4] = [
+                            accumulated_data[0],
+                            accumulated_data[1],
+                            accumulated_data[2],
+                            accumulated_data[3],
+                        ];
 
-                    let box_title_bytes: [u8; 4] = [
-                        accumulated_data[4],
-                        accumulated_data[5],
-                        accumulated_data[6],
-                        accumulated_data[7],
-                    ];
+                        let box_size = u32::from_be_bytes(box_size_bytes);
 
-                    let box_title = String::from_utf8_lossy(&box_title_bytes);
+                        let box_title_bytes: [u8; 4] = [
+                            accumulated_data[4],
+                            accumulated_data[5],
+                            accumulated_data[6],
+                            accumulated_data[7],
+                        ];
 
-                    if box_title.to_string().as_str() != "mdat"
-                        && accumulated_data.len() < box_size as usize
-                    {
-                        break;
-                    }
+                        let box_title = String::from_utf8_lossy(&box_title_bytes);
 
-                    accumulated_data.drain(..8);
-
-                    match box_title.to_string().as_str() {
-                        "ftyp" => {
-                            ftyp_box = Some(FTYPBox {
-                                size: box_size,
-                                data: accumulated_data.drain(..(box_size - 8) as usize).collect(),
-                            });
+                        if box_title.to_string().as_str() != "mdat"
+                            && accumulated_data.len() < box_size as usize
+                        {
+                            break;
                         }
-                        "moov" => {
-                            match parse_moov(
-                                box_size,
-                                accumulated_data.drain(..(box_size - 8) as usize).collect(),
-                            ) {
-                                Ok(ok_box) => {
-                                    moov_box = Some(ok_box);
+
+                        accumulated_data.drain(..8);
+
+                        match box_title.to_string().as_str() {
+                            "ftyp" => {
+                                ftyp_box = Some(FTYPBox {
+                                    size: box_size,
+                                    data: accumulated_data
+                                        .drain(..(box_size - 8) as usize)
+                                        .collect(),
+                                });
+                            }
+                            "moov" => {
+                                match parse_moov(
+                                    box_size,
+                                    accumulated_data.drain(..(box_size - 8) as usize).collect(),
+                                ) {
+                                    Ok(ok_box) => {
+                                        moov_box = Some(ok_box);
+                                    }
+                                    Err(error) => {
+                                        panic!("{}", error);
+                                    }
                                 }
-                                Err(error) => {
-                                    panic!("{}", error);
+
+                                println!(
+                                    "Moov box parsed with {} streams",
+                                    moov_box.as_ref().unwrap().traks.len(),
+                                );
+
+                                sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
+
+                                for sample in sample_data.as_ref().unwrap() {
+                                    println!("Got sample {:?}", sample);
                                 }
                             }
-
-                            println!(
-                                "Moov box parsed with {} streams",
-                                moov_box.as_ref().unwrap().traks.len(),
-                            );
-
-                            sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
-
-                            for sample in sample_data.as_ref().unwrap() {
-                                println!("Got sample {:?}", sample);
+                            "mdat" => {
+                                if ftyp_box.is_none() {
+                                    println!("We are f'ed in the B by ftyp");
+                                }
+                                if sample_data.is_none() {
+                                    println!("We are f'ed in the B by moov");
+                                }
+                                println!("This is where the fun begins");
                             }
-                        }
-                        "mdat" => {
-                            if ftyp_box.is_none() {
-                                println!("We are f'ed in the B by ftyp");
+                            _ => {
+                                println!("So this is new, we got a {} box", box_title.to_string());
                             }
-                            if sample_data.is_none() {
-                                println!("We are f'ed in the B by moov");
-                            }
-                            println!("This is where the fun begins");
-                        }
-                        _ => {
-                            println!("So this is new, we got a {} box", box_title.to_string());
                         }
                     }
                 }
-            }
-            Err(e) => {
-                eprintln!("Error reading from yt-dlp: {}", e);
+                Err(e) => {
+                    eprintln!("Error reading from yt-dlp: {}", e);
+                }
             }
         }
     }
