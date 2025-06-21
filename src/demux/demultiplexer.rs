@@ -17,7 +17,19 @@ pub struct Demultiplexer {
 }
 
 impl Demultiplexer {
-    fn demux(&self) {
+    pub fn new(
+        rgb_frames_queue: Arc<Mutex<ContentQueue<Bytes>>>,
+        audio_samples_queue: Arc<Mutex<ContentQueue<Bytes>>>,
+        demultiplexing_done_tx: Sender<()>,
+    ) -> Self {
+        Self {
+            rgb_frames_queue,
+            audio_samples_queue,
+            demultiplexing_done_tx,
+        }
+    }
+
+    pub fn demux(&self) {
         let mut yt_dlp_process = Command::new("yt-dlp")
             .args([
                 "-o",
@@ -116,12 +128,15 @@ impl Demultiplexer {
                                     println!("We are f'ed in the B by moov");
                                 }
                                 println!("This is where the fun begins");
+                                break;
                             }
                             _ => {
                                 println!("So this is new, we got a {} box", box_title.to_string());
                             }
                         }
                     }
+
+                    println!("Read {} bytes from mdat", bytes_read);
                 }
                 Err(e) => {
                     eprintln!("Error reading from yt-dlp: {}", e);

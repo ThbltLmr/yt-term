@@ -29,6 +29,7 @@ use std::{
     time::Duration,
 };
 
+use demux::demultiplexer::Demultiplexer;
 use helpers::{
     adapter::Adapter,
     args::{parse_args, Args},
@@ -37,13 +38,23 @@ use helpers::{
 };
 
 fn main() {
-    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+    let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
+
+    //    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
 
     let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
     let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
     let audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
+
+    let demux = Demultiplexer::new(
+        raw_video_buffer.clone(),
+        audio_buffer.clone(),
+        demultiplexing_done_tx,
+    );
+
+    demux.demux();
 
     let (audio_streaming_done_tx, audio_streaming_done_rx) = channel();
     let (video_streaming_done_tx, video_streaming_done_rx) = channel();
