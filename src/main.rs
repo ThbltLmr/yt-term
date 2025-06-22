@@ -18,6 +18,7 @@ mod audio {
 }
 
 mod demux {
+    mod decoder;
     pub mod demultiplexer;
     mod moov;
     mod sample_data;
