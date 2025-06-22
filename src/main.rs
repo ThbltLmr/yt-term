@@ -38,9 +38,9 @@ use helpers::{
 };
 
 fn main() {
-    let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
+    //let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
-    //    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
 
@@ -48,13 +48,13 @@ fn main() {
     let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
     let audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
 
-    let demux = Demultiplexer::new(
-        raw_video_buffer.clone(),
-        audio_buffer.clone(),
-        demultiplexing_done_tx,
-    );
+    //let demux = Demultiplexer::new(
+    //raw_video_buffer.clone(),
+    //audio_buffer.clone(),
+    //demultiplexing_done_tx,
+    //);
 
-    demux.demux();
+    //demux.demux();
 
     let (audio_streaming_done_tx, audio_streaming_done_rx) = channel();
     let (video_streaming_done_tx, video_streaming_done_rx) = channel();
