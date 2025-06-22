@@ -18,7 +18,6 @@ mod audio {
 }
 
 mod demux {
-    mod decoder;
     pub mod demultiplexer;
     mod moov;
     mod sample_data;
@@ -40,7 +39,7 @@ use helpers::{
 fn main() {
     let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
-    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+    //    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
 

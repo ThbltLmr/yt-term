@@ -113,11 +113,12 @@ impl Demultiplexer {
                                     moov_box.as_ref().unwrap().traks.len(),
                                 );
 
-                                sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
-
-                                for sample in sample_data.as_ref().unwrap() {
-                                    println!("Got sample {:?}", sample);
-                                }
+                                sample_data = Some(
+                                    extract_sample_data(moov_box.unwrap())
+                                        .unwrap()
+                                        .into_iter()
+                                        .peekable(),
+                                );
                             }
                             "mdat" => {
                                 if ftyp_box.is_none() {
@@ -134,8 +135,7 @@ impl Demultiplexer {
                             }
                         }
                     }
-
-                    println!("Read {} bytes from mdat", bytes_read);
+                    if accumulated_data.len() >= sample_data.unwrap().peek() {}
                 }
                 Err(e) => {
                     eprintln!("Error reading from yt-dlp: {}", e);
