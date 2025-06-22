@@ -9,3 +9,4 @@ base64 = "0.21"
 libc = "0.2.172"
 simple_pulse = { version = "2.29.0", package = "libpulse-simple-binding" }
 pulse = { version = "2.30.1", package = "libpulse-binding" }
+ffmpeg-next = "7.1.0"
