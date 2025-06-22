@@ -3,27 +3,26 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use super::types::Bytes;
 use super::{structs::ContentQueue, types::Res};
 
 pub struct Logger {
     start_time: Instant,
     log_file: std::fs::File,
-    raw_video_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-    encoded_video_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-    audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-    ready_video_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-    ready_audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    raw_video_buffer: Arc<Mutex<ContentQueue>>,
+    encoded_video_buffer: Arc<Mutex<ContentQueue>>,
+    audio_buffer: Arc<Mutex<ContentQueue>>,
+    ready_video_buffer: Arc<Mutex<ContentQueue>>,
+    ready_audio_buffer: Arc<Mutex<ContentQueue>>,
     playing_done_rx: std::sync::mpsc::Receiver<()>,
 }
 
 impl Logger {
     pub fn new(
-        raw_video_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-        encoded_video_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-        audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-        ready_video_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-        ready_audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        raw_video_buffer: Arc<Mutex<ContentQueue>>,
+        encoded_video_buffer: Arc<Mutex<ContentQueue>>,
+        audio_buffer: Arc<Mutex<ContentQueue>>,
+        ready_video_buffer: Arc<Mutex<ContentQueue>>,
+        ready_audio_buffer: Arc<Mutex<ContentQueue>>,
         playing_done_rx: std::sync::mpsc::Receiver<()>,
     ) -> Res<Self> {
         let log_file =
@@ -56,11 +55,11 @@ impl Logger {
             self.log_file,
             "{},{},{},{},{},{}",
             self.start_time.elapsed().as_secs_f64(),
-            self.raw_video_buffer.lock().unwrap().len(),
-            self.encoded_video_buffer.lock().unwrap().len(),
-            self.audio_buffer.lock().unwrap().len(),
-            self.ready_video_buffer.lock().unwrap().len(),
-            self.ready_audio_buffer.lock().unwrap().len(),
+            self.raw_video_buffer.lock().unwrap().bytes_len(),
+            self.encoded_video_buffer.lock().unwrap().bytes_len(),
+            self.audio_buffer.lock().unwrap().bytes_len(),
+            self.ready_video_buffer.lock().unwrap().bytes_len(),
+            self.ready_audio_buffer.lock().unwrap().bytes_len(),
         )
         .map_err(|e| format!("Failed to write to log file: {}", e))?;
         Ok(())

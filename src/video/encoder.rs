@@ -8,8 +8,8 @@ use std::{
 };
 
 pub struct Encoder {
-    rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-    encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    rgb_buffer: Arc<Mutex<ContentQueue>>,
+    encoded_buffer: Arc<Mutex<ContentQueue>>,
     width: usize,
     height: usize,
     term_width: u16,
@@ -20,8 +20,8 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new(
-        rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
-        encoded_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        rgb_buffer: Arc<Mutex<ContentQueue>>,
+        encoded_buffer: Arc<Mutex<ContentQueue>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,

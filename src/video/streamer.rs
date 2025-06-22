@@ -4,13 +4,10 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use crate::helpers::{
-    structs::ContentQueue,
-    types::{Bytes, Res},
-};
+use crate::helpers::{structs::ContentQueue, types::Res};
 
 pub struct VideoStreamer {
-    rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    rgb_buffer: Arc<Mutex<ContentQueue>>,
     streaming_done_tx: mpsc::Sender<()>,
     url: String,
     width: usize,
@@ -19,7 +16,7 @@ pub struct VideoStreamer {
 
 impl VideoStreamer {
     pub fn new(
-        rgb_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        rgb_buffer: Arc<Mutex<ContentQueue>>,
         streaming_done_tx: mpsc::Sender<()>,
         url: String,
         width: usize,

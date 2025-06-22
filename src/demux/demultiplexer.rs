@@ -8,18 +8,17 @@ use crate::demux::moov::{parse_moov, FTYPBox};
 
 use crate::demux::sample_data::extract_sample_data;
 use crate::helpers::structs::ContentQueue;
-use crate::helpers::types::Bytes;
 
 pub struct Demultiplexer {
-    pub rgb_frames_queue: Arc<Mutex<ContentQueue<Bytes>>>,
-    pub audio_samples_queue: Arc<Mutex<ContentQueue<Bytes>>>,
+    pub rgb_frames_queue: Arc<Mutex<ContentQueue>>,
+    pub audio_samples_queue: Arc<Mutex<ContentQueue>>,
     pub demultiplexing_done_tx: Sender<()>,
 }
 
 impl Demultiplexer {
     pub fn new(
-        rgb_frames_queue: Arc<Mutex<ContentQueue<Bytes>>>,
-        audio_samples_queue: Arc<Mutex<ContentQueue<Bytes>>>,
+        rgb_frames_queue: Arc<Mutex<ContentQueue>>,
+        audio_samples_queue: Arc<Mutex<ContentQueue>>,
         demultiplexing_done_tx: Sender<()>,
     ) -> Self {
         Self {

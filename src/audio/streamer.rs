@@ -4,20 +4,17 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use crate::helpers::{
-    structs::ContentQueue,
-    types::{Bytes, Res},
-};
+use crate::helpers::{structs::ContentQueue, types::Res};
 
 pub struct AudioStreamer {
-    audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    audio_buffer: Arc<Mutex<ContentQueue>>,
     url: String,
     streaming_done_tx: mpsc::Sender<()>,
 }
 
 impl AudioStreamer {
     pub fn new(
-        audio_buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        audio_buffer: Arc<Mutex<ContentQueue>>,
         url: String,
         streaming_done_tx: mpsc::Sender<()>,
     ) -> Res<Self> {

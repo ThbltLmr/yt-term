@@ -34,7 +34,6 @@ use helpers::{
     adapter::Adapter,
     args::{parse_args, Args},
     structs::{ContentQueue, ScreenGuard},
-    types::Bytes,
 };
 
 fn main() {
@@ -44,9 +43,9 @@ fn main() {
 
     let Args { url, width, height } = parse_args();
 
-    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
-    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
-    let audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
+    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(25)));
+    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(25)));
+    let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
 
     //let demux = Demultiplexer::new(
     //raw_video_buffer.clone(),
@@ -107,8 +106,8 @@ fn main() {
         encoder.encode().expect("Failed to start encoding");
     });
 
-    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
-    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
+    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(25)));
 
     let audio_adapter = audio::adapter::AudioAdapter::new(
         Duration::from_secs(1),
