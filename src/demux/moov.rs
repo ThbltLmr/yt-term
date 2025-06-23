@@ -124,11 +124,6 @@ pub struct MOOVBox {
     pub traks: Vec<TRAKBox>,
 }
 
-pub enum TopBoxes {
-    Moov(MOOVBox),
-    Ftyp(FTYPBox),
-}
-
 pub fn parse_moov(size: u32, mut data: Vec<u8>) -> Result<MOOVBox, Box<dyn Error>> {
     let mut mvhd_box = None;
     let mut traks: Vec<TRAKBox> = vec![];
