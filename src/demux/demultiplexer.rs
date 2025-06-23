@@ -35,8 +35,6 @@ impl Demultiplexer {
         let audio_context = ffmpeg::codec::context::Context::new_with_codec(audio_codec);
         let audio_decoder = audio_context.decoder().audio().unwrap();
 
-        println!("{:?}", audio_decoder.id());
-
         Self {
             rgb_frames_queue,
             audio_samples_queue,
@@ -47,8 +45,6 @@ impl Demultiplexer {
     }
 
     pub fn demux(&mut self) {
-        ffmpeg::init().unwrap();
-
         let mut yt_dlp_process = Command::new("yt-dlp")
             .args([
                 "-o",

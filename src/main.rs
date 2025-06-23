@@ -37,6 +37,7 @@ use helpers::{
 };
 
 fn main() {
+    ffmpeg_next::init().unwrap();
     let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
     //    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");

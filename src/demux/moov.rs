@@ -25,6 +25,7 @@ pub struct MVHDBox {
 pub struct STSDBox {
     pub size: u32,
     pub data: Vec<u8>,
+    pub avcc: Option<Vec<u8>>,
 }
 
 pub struct STTSBox {
@@ -307,10 +308,87 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
         return Err(format!("not stsd, got {}", stsd_title).into());
     }
 
-    let stsd_box = STSDBox {
+    let mut stsd_box = STSDBox {
         size: stsd_size,
         data: data.drain(..(stsd_size - 8) as usize).collect(),
+        avcc: None,
     };
+    // Get the version and flags (4 bytes) and entry_count (4 bytes)
+    // stsd_box.data contains version, flags, entry_count, and then sample description entries.
+    let _version_flags = u32::from_be_bytes(stsd_box.data[0..4].try_into().unwrap());
+    let entry_count = u32::from_be_bytes(stsd_box.data[4..8].try_into().unwrap());
+
+    // Assuming only one entry for now, typically for video or audio streams
+    if entry_count >= 1 {
+        let mut current_offset_in_stsd_data = 8; // Offset after version, flags, and entry_count
+
+        // Read the size and format of the first sample description entry
+        if stsd_box.data.len() >= current_offset_in_stsd_data + 8 {
+            // Check if enough bytes for size + format
+            let _entry_size = u32::from_be_bytes(
+                stsd_box.data[current_offset_in_stsd_data..current_offset_in_stsd_data + 4]
+                    .try_into()
+                    .unwrap(),
+            );
+            current_offset_in_stsd_data += 4;
+            let format_bytes =
+                &stsd_box.data[current_offset_in_stsd_data..current_offset_in_stsd_data + 4];
+            let format = String::from_utf8_lossy(format_bytes);
+            current_offset_in_stsd_data += 4;
+
+            if format == "avc1" {
+                // The avc1 sample description box has a fixed header of 78 bytes after size and format
+                // The avcC box typically follows this fixed header within the avc1 entry.
+                let avc_header_fixed_size: usize = 78; // Bytes for avc1 specific fields before any sub-boxes
+
+                // Absolute offset in stsd_box.data for avcC box header (size + title)
+                // It's `current_offset_in_stsd_data` (which is 8 bytes after version/flags/entry_count for 'avc1' format)
+                // plus 78 bytes for avc1 specific header fields.
+                let avcc_offset_in_stsd_data = current_offset_in_stsd_data + avc_header_fixed_size;
+
+                // Check if there is enough data for avcC box header (size + title)
+                if stsd_box.data.len() >= avcc_offset_in_stsd_data + 8 {
+                    let avcc_size = u32::from_be_bytes(
+                        stsd_box.data[avcc_offset_in_stsd_data..avcc_offset_in_stsd_data + 4]
+                            .try_into()
+                            .unwrap(),
+                    );
+                    let avcc_title_bytes =
+                        &stsd_box.data[avcc_offset_in_stsd_data + 4..avcc_offset_in_stsd_data + 8];
+                    let avcc_title = String::from_utf8_lossy(avcc_title_bytes);
+
+                    if avcc_title == "avcC" {
+                        let avcc_data_start = avcc_offset_in_stsd_data + 8;
+                        // The avcC box size includes its own 8-byte header (size + title)
+                        let avcc_data_len = (avcc_size - 8) as usize;
+                        let avcc_data_end = avcc_data_start + avcc_data_len;
+
+                        if stsd_box.data.len() >= avcc_data_end {
+                            let avcc_data = stsd_box.data[avcc_data_start..avcc_data_end].to_vec();
+                            println!("Found avcC box. Content: {:?}", avcc_data);
+                            stsd_box.avcc = Some(avcc_data);
+                        } else {
+                            println!("Not enough data for avcC box content. Expected end: {}, Actual len: {}", avcc_data_end, stsd_box.data.len());
+                        }
+                    } else {
+                        println!("Expected avcC box, but got {}", avcc_title);
+                    }
+                } else {
+                    println!(
+                        "Not enough data for avcC box header. Required: {}, Actual: {}",
+                        avcc_offset_in_stsd_data + 8,
+                        stsd_box.data.len()
+                    );
+                }
+            } else {
+                println!("Codec is not avc1, got {}.", format);
+            }
+        } else {
+            println!("Not enough data for sample description entry size and format.");
+        }
+    } else {
+        println!("No sample description entries found in stsd box.");
+    }
 
     let mut stts_box: Option<STTSBox> = None;
     let mut ctts_box: Option<CTTSBox> = None;
