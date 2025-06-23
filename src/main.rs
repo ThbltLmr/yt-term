@@ -47,7 +47,7 @@ fn main() {
     let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(25)));
     let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
 
-    let demux = Demultiplexer::new(
+    let mut demux = Demultiplexer::new(
         raw_video_buffer.clone(),
         audio_buffer.clone(),
         demultiplexing_done_tx,

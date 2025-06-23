@@ -1,4 +1,4 @@
-use ffmpeg_next as ffmpeg;
+use ffmpeg_next::{self as ffmpeg, frame, Packet};
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
@@ -29,9 +29,13 @@ impl Demultiplexer {
         let video_context = ffmpeg::codec::context::Context::new_with_codec(video_codec);
         let video_decoder = video_context.decoder().video().unwrap();
 
+        println!("{:?}", video_decoder.id());
+
         let audio_codec = ffmpeg::codec::decoder::find(ffmpeg_next::codec::Id::AAC).unwrap();
         let audio_context = ffmpeg::codec::context::Context::new_with_codec(audio_codec);
         let audio_decoder = audio_context.decoder().audio().unwrap();
+
+        println!("{:?}", audio_decoder.id());
 
         Self {
             rgb_frames_queue,
@@ -42,7 +46,7 @@ impl Demultiplexer {
         }
     }
 
-    pub fn demux(&self) {
+    pub fn demux(&mut self) {
         ffmpeg::init().unwrap();
 
         let mut yt_dlp_process = Command::new("yt-dlp")
@@ -124,14 +128,7 @@ impl Demultiplexer {
                                     }
                                 }
 
-                                println!(
-                                    "Moov box parsed with {} streams",
-                                    moov_box.as_ref().unwrap().traks.len(),
-                                );
-
                                 sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
-
-                                println!("Got {:?} samples", sample_data.as_ref().unwrap().len());
                             }
                             "mdat" => {
                                 if ftyp_box.is_none() {
@@ -140,7 +137,6 @@ impl Demultiplexer {
                                 if sample_data.clone().is_none() {
                                     println!("We are f'ed in the B by moov");
                                 }
-                                println!("This is where the fun begins");
                                 break;
                             }
                             _ => {
@@ -162,11 +158,38 @@ impl Demultiplexer {
                             if current_sample_data.1 {
                                 // send to video decoder
                                 // add result to ContentQueue
-                                println!("Adding {} bytes to video queue", sample.len());
+                                let mut frame = frame::Video::empty();
+                                frame.set_width(640);
+                                frame.set_height(360);
+                                self.video_decoder.send_packet(&Packet::copy(&sample));
+                                self.video_decoder.receive_frame(&mut frame);
+
+                                // add result to ContentQueue
+                                self.rgb_frames_queue
+                                    .lock()
+                                    .unwrap()
+                                    .push_el(frame.data(0).to_vec());
+
+                                println!(
+                                    "Video len {}",
+                                    self.rgb_frames_queue.lock().unwrap().len()
+                                );
                             } else {
                                 // send to audio decoder
+                                // let mut frame = frame::Audio::empty();
+                                // self.audio_decoder.send_packet(&Packet::copy(&sample));
+                                // self.audio_decoder.receive_frame(&mut frame);
+
                                 // add result to ContentQueue
-                                println!("Adding {} bytes to audio queue", sample.len());
+                                // self.audio_samples_queue
+                                // .lock()
+                                // .unwrap()
+                                // .push_el(frame.data(0).to_vec());
+
+                                // println!(
+                                // "Audio len {}",
+                                // self.audio_samples_queue.lock().unwrap().len()
+                                // );
                             }
                         }
                     }
