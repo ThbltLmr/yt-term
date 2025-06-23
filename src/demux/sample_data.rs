@@ -1,4 +1,4 @@
-use std::{error::Error, usize};
+use std::{collections::VecDeque, error::Error, usize};
 
 use super::moov::{MOOVBox, STCOBox, STSCBox, STSZBox, Streams};
 
@@ -16,8 +16,8 @@ struct ChunkToSample {
     pub sample_count: u32,
 }
 
-pub fn extract_sample_data(moov_box: MOOVBox) -> Result<Vec<SampleData>, Box<dyn Error>> {
-    let mut chunk_data: Vec<ChunkData> = vec![];
+pub fn extract_sample_data(moov_box: MOOVBox) -> Result<VecDeque<SampleData>, Box<dyn Error>> {
+    let mut chunk_data: VecDeque<ChunkData> = VecDeque::new();
     for trak in moov_box.traks {
         let chunk_offsets = parse_stco(&trak.media.minf.stbl.stco);
         let chunk_offsets_with_sample_count = parse_stsc(&trak.media.minf.stbl.stsc, chunk_offsets);
@@ -47,11 +47,12 @@ pub fn extract_sample_data(moov_box: MOOVBox) -> Result<Vec<SampleData>, Box<dyn
     Ok(format_sample_data(chunk_data))
 }
 
-fn format_sample_data(mut chunk_data: Vec<ChunkData>) -> Vec<SampleData> {
-    chunk_data.sort_by(|a, b| a.offset.cmp(&b.offset));
-    assert!(chunk_data[0].offset < chunk_data[1].offset);
+fn format_sample_data(chunk_data: VecDeque<ChunkData>) -> VecDeque<SampleData> {
+    let mut chunk_data_vec: Vec<ChunkData> = chunk_data.into();
+    chunk_data_vec.sort_by(|a, b| a.offset.cmp(&b.offset));
+    assert!(chunk_data_vec[0].offset < chunk_data_vec[1].offset);
 
-    chunk_data
+    chunk_data_vec
         .iter()
         .flat_map(|chunk| {
             chunk
@@ -61,9 +62,9 @@ fn format_sample_data(mut chunk_data: Vec<ChunkData>) -> Vec<SampleData> {
                     let sample_data: SampleData = (*size, chunk.is_video);
                     sample_data
                 })
-                .collect::<Vec<SampleData>>()
+                .collect::<VecDeque<SampleData>>()
         })
-        .collect::<Vec<SampleData>>()
+        .collect::<VecDeque<SampleData>>()
 }
 
 fn parse_stco(stco_box: &STCOBox) -> Vec<u32> {
@@ -126,7 +127,7 @@ fn parse_stsz(
     stsz: &STSZBox,
     chunk_offsets_with_sample_count: Vec<(u32, u32)>,
     is_video: bool,
-) -> Vec<ChunkData> {
+) -> VecDeque<ChunkData> {
     let data: Vec<u32> = stsz
         .data
         .chunks_exact(4)

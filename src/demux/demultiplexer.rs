@@ -113,18 +113,13 @@ impl Demultiplexer {
                                     moov_box.as_ref().unwrap().traks.len(),
                                 );
 
-                                sample_data = Some(
-                                    extract_sample_data(moov_box.unwrap())
-                                        .unwrap()
-                                        .into_iter()
-                                        .peekable(),
-                                );
+                                sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
                             }
                             "mdat" => {
                                 if ftyp_box.is_none() {
                                     println!("We are f'ed in the B by ftyp");
                                 }
-                                if sample_data.is_none() {
+                                if sample_data.clone().is_none() {
                                     println!("We are f'ed in the B by moov");
                                 }
                                 println!("This is where the fun begins");
@@ -135,7 +130,10 @@ impl Demultiplexer {
                             }
                         }
                     }
-                    if accumulated_data.len() >= sample_data.unwrap().peek() {}
+                    while accumulated_data.len()
+                        >= sample_data.as_ref().unwrap().front().unwrap().0 as usize
+                    {
+                    }
                 }
                 Err(e) => {
                     eprintln!("Error reading from yt-dlp: {}", e);
