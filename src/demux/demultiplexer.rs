@@ -1,3 +1,4 @@
+use ffmpeg_next as ffmpeg;
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
@@ -14,6 +15,8 @@ pub struct Demultiplexer {
     pub rgb_frames_queue: Arc<Mutex<ContentQueue>>,
     pub audio_samples_queue: Arc<Mutex<ContentQueue>>,
     pub demultiplexing_done_tx: Sender<()>,
+    pub video_decoder: ffmpeg::decoder::Video,
+    pub audio_decoder: ffmpeg::decoder::Audio,
 }
 
 impl Demultiplexer {
@@ -22,14 +25,26 @@ impl Demultiplexer {
         audio_samples_queue: Arc<Mutex<ContentQueue>>,
         demultiplexing_done_tx: Sender<()>,
     ) -> Self {
+        let video_codec = ffmpeg::codec::decoder::find(ffmpeg_next::codec::Id::H264).unwrap();
+        let video_context = ffmpeg::codec::context::Context::new_with_codec(video_codec);
+        let video_decoder = video_context.decoder().video().unwrap();
+
+        let audio_codec = ffmpeg::codec::decoder::find(ffmpeg_next::codec::Id::AAC).unwrap();
+        let audio_context = ffmpeg::codec::context::Context::new_with_codec(audio_codec);
+        let audio_decoder = audio_context.decoder().audio().unwrap();
+
         Self {
             rgb_frames_queue,
             audio_samples_queue,
             demultiplexing_done_tx,
+            video_decoder,
+            audio_decoder,
         }
     }
 
     pub fn demux(&self) {
+        ffmpeg::init().unwrap();
+
         let mut yt_dlp_process = Command::new("yt-dlp")
             .args([
                 "-o",
