@@ -170,15 +170,15 @@ fn main() {
         if audio_buffer.lock().unwrap().has_one_second_ready()
             && encoded_video_buffer.lock().unwrap().has_one_second_ready()
         {
-            audio_buffer
-                .lock()
-                .unwrap()
-                .queue_one_second_into(ready_audio_buffer.clone());
+            //     audio_buffer
+            //          .lock()
+            //           .unwrap()
+            //            .queue_one_second_into(ready_audio_buffer.clone());
 
-            encoded_video_buffer
-                .lock()
-                .unwrap()
-                .queue_one_second_into(ready_video_buffer.clone());
+            //            encoded_video_buffer
+            //               .lock()
+            //              .unwrap()
+            //             .queue_one_second_into(ready_video_buffer.clone());
         } else {
             thread::sleep(std::time::Duration::from_millis(100));
         }

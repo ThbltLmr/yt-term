@@ -8,6 +8,7 @@ use crate::demux::moov::{parse_moov, FTYPBox};
 
 use crate::demux::sample_data::extract_sample_data;
 use crate::helpers::structs::ContentQueue;
+use crate::helpers::types::Bytes;
 
 pub struct Demultiplexer {
     pub rgb_frames_queue: Arc<Mutex<ContentQueue>>,
@@ -114,6 +115,8 @@ impl Demultiplexer {
                                 );
 
                                 sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
+
+                                println!("Got {:?} samples", sample_data.as_ref().unwrap().len());
                             }
                             "mdat" => {
                                 if ftyp_box.is_none() {
@@ -130,9 +133,27 @@ impl Demultiplexer {
                             }
                         }
                     }
-                    while accumulated_data.len()
-                        >= sample_data.as_ref().unwrap().front().unwrap().0 as usize
-                    {
+                    if sample_data.is_some() {
+                        while accumulated_data.len()
+                            >= sample_data.as_ref().unwrap().front().unwrap().0 as usize
+                        {
+                            let current_sample_data =
+                                sample_data.as_mut().unwrap().pop_front().unwrap();
+
+                            let sample: Bytes = accumulated_data
+                                .drain(..current_sample_data.0 as usize)
+                                .collect();
+
+                            if current_sample_data.1 {
+                                // send to video decoder
+                                // add result to ContentQueue
+                                println!("Adding {} bytes to video queue", sample.len());
+                            } else {
+                                // send to audio decoder
+                                // add result to ContentQueue
+                                println!("Adding {} bytes to audio queue", sample.len());
+                            }
+                        }
                     }
                 }
                 Err(e) => {
