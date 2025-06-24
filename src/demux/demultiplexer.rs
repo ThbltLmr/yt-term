@@ -211,6 +211,7 @@ impl Demultiplexer {
 
                                 if !annexb_data.is_empty() {
                                     let packet = Packet::copy(&annexb_data);
+                                    println!("{}", packet.is_corrupt());
 
                                     match self.video_decoder.send_packet(&packet) {
                                         Ok(_) => {
@@ -248,6 +249,7 @@ impl Demultiplexer {
                                 // Audio sample - AAC decoding
                                 let packet = Packet::copy(&sample);
 
+                                println!("{}", packet.is_corrupt());
                                 match self.audio_decoder.send_packet(&packet) {
                                     Ok(_) => {
                                         let mut frame = frame::Audio::empty();
