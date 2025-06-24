@@ -1,4 +1,4 @@
-use ffmpeg_next::{self as ffmpeg, decoder, frame, Packet};
+use ffmpeg_next::{self as ffmpeg, frame, Packet};
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
@@ -26,14 +26,27 @@ impl Demultiplexer {
         audio_samples_queue: Arc<Mutex<ContentQueue>>,
         demultiplexing_done_tx: Sender<()>,
     ) -> Self {
-        let video_codec = ffmpeg::codec::decoder::find(ffmpeg_next::codec::Id::H264).unwrap();
-        let video_context = ffmpeg::codec::context::Context::new_with_codec(video_codec);
+        let input = ffmpeg::format::input("/home/Thibault/Downloads/sample.mp4").unwrap();
+        let video_context = ffmpeg::codec::context::Context::from_parameters(
+            input
+                .streams()
+                .best(ffmpeg_next::media::Type::Video)
+                .unwrap()
+                .parameters(),
+        )
+        .unwrap();
+
         let video_decoder = video_context.decoder().video().unwrap();
 
-        println!("{:?}", video_decoder.id());
+        let audio_context = ffmpeg::codec::context::Context::from_parameters(
+            input
+                .streams()
+                .best(ffmpeg_next::media::Type::Audio)
+                .unwrap()
+                .parameters(),
+        )
+        .unwrap();
 
-        let audio_codec = ffmpeg::codec::decoder::find(ffmpeg_next::codec::Id::AAC).unwrap();
-        let audio_context = ffmpeg::codec::context::Context::new_with_codec(audio_codec);
         let audio_decoder = audio_context.decoder().audio().unwrap();
 
         Self {
@@ -44,94 +57,6 @@ impl Demultiplexer {
             audio_decoder,
             nal_length_size: 4,
         }
-    }
-
-    // Extract SPS and PPS from avcC box and send to decoder
-    fn configure_video_decoder(
-        &mut self,
-        avcc_data: &[u8],
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        if avcc_data.len() < 7 {
-            return Err("avcC data too short".into());
-        }
-
-        // Parse avcC box structure
-        let _configuration_version = avcc_data[0];
-        let _avc_profile_indication = avcc_data[1];
-        let _profile_compatibility = avcc_data[2];
-        let _avc_level_indication = avcc_data[3];
-
-        // Extract NAL unit length size
-        self.nal_length_size = (avcc_data[4] & 0x03) + 1;
-
-        // Number of SPS NAL units
-        let num_sps = avcc_data[5] & 0x1F;
-        let mut offset = 6;
-
-        let mut extradata = Vec::new();
-
-        // Extract SPS
-        for _ in 0..num_sps {
-            if offset + 2 > avcc_data.len() {
-                return Err("Invalid avcC: not enough data for SPS length".into());
-            }
-
-            let sps_length =
-                u16::from_be_bytes([avcc_data[offset], avcc_data[offset + 1]]) as usize;
-            offset += 2;
-
-            if offset + sps_length > avcc_data.len() {
-                return Err("Invalid avcC: not enough data for SPS".into());
-            }
-
-            // Add start code
-            extradata.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
-            extradata.extend_from_slice(&avcc_data[offset..offset + sps_length]);
-            offset += sps_length;
-        }
-
-        // Number of PPS NAL units
-        if offset >= avcc_data.len() {
-            return Err("Invalid avcC: no PPS data".into());
-        }
-
-        let num_pps = avcc_data[offset];
-        offset += 1;
-
-        // Extract PPS
-        for _ in 0..num_pps {
-            if offset + 2 > avcc_data.len() {
-                return Err("Invalid avcC: not enough data for PPS length".into());
-            }
-
-            let pps_length =
-                u16::from_be_bytes([avcc_data[offset], avcc_data[offset + 1]]) as usize;
-            offset += 2;
-
-            if offset + pps_length > avcc_data.len() {
-                return Err("Invalid avcC: not enough data for PPS".into());
-            }
-
-            // Add start code
-            extradata.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
-            extradata.extend_from_slice(&avcc_data[offset..offset + pps_length]);
-            offset += pps_length;
-        }
-
-        // Send SPS/PPS as a packet to the decoder
-        if !extradata.is_empty() {
-            let packet = Packet::copy(&extradata);
-            match self.video_decoder.send_packet(&packet) {
-                Ok(_) => {
-                    println!("Successfully sent SPS/PPS to decoder");
-                }
-                Err(e) => {
-                    println!("Failed to send SPS/PPS: {:?}", e);
-                }
-            }
-        }
-
-        Ok(())
     }
 
     // Convert AVCC format to Annex B format (add start codes)
@@ -179,7 +104,7 @@ impl Demultiplexer {
                 "--no-part",
                 "-f",
                 "18",
-                "https://www.youtube.com/watch?v=kFsXTaoP2A4",
+                "https://www.youtube.com/watch?v=MvsAesQ-4zA",
             ])
             .stderr(Stdio::null())
             .stdout(Stdio::piped())
@@ -244,26 +169,13 @@ impl Demultiplexer {
                                     accumulated_data.drain(..(box_size - 8) as usize).collect(),
                                 ) {
                                     Ok(ok_box) => {
-                                        for trak in &ok_box.traks {
-                                            if let Some(ref avcc_data) =
-                                                trak.media.minf.stbl.stsd.avcc
-                                            {
-                                                if let Err(e) =
-                                                    self.configure_video_decoder(avcc_data)
-                                                {
-                                                    println!(
-                                                        "Failed to configure video decoder: {}",
-                                                        e
-                                                    );
-                                                }
-                                            }
-                                        }
                                         moov_box = Some(ok_box);
                                     }
                                     Err(error) => {
                                         panic!("{}", error);
                                     }
                                 }
+                                println!("Moov parsed");
 
                                 sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
                             }
@@ -303,6 +215,7 @@ impl Demultiplexer {
                                     match self.video_decoder.send_packet(&packet) {
                                         Ok(_) => {
                                             // Try to receive frames
+                                            println!("Send video frame ok");
                                             let mut frame = frame::Video::empty();
                                             while self
                                                 .video_decoder
@@ -327,7 +240,7 @@ impl Demultiplexer {
                                             }
                                         }
                                         Err(e) => {
-                                            //                                            println!("Failed to send video packet: {:?}", e);
+                                            println!("Failed to send video packet: {:?}", e);
                                         }
                                     }
                                 }
@@ -354,7 +267,7 @@ impl Demultiplexer {
                                         }
                                     }
                                     Err(e) => {
-                                        //                                       println!("Failed to send audio packet: {:?}", e);
+                                        println!("Failed to send audio packet: {:?}", e);
                                     }
                                 }
                             }

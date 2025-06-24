@@ -107,9 +107,11 @@ fn parse_stsc(stsc: &STSCBox, chunk_offsets: Vec<u32>) -> Vec<(u32, u32)> {
     let mut next_sample_count_index = 1;
 
     for (index, chunk_offset) in chunk_offsets.iter().enumerate() {
-        if index + 1 >= chunk_to_sample[next_sample_count_index].starting_chunk as usize {
-            current_sample_count_index = next_sample_count_index;
-            next_sample_count_index += 1;
+        if chunk_to_sample.len() > next_sample_count_index {
+            if index + 1 >= chunk_to_sample[next_sample_count_index].starting_chunk as usize {
+                current_sample_count_index = next_sample_count_index;
+                next_sample_count_index += 1;
+            }
         }
 
         let tuple = (
