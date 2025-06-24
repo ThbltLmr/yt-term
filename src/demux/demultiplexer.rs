@@ -1,4 +1,4 @@
-use ffmpeg_next::{self as ffmpeg, frame, Packet};
+use ffmpeg_next::{self as ffmpeg, decoder, frame, Packet};
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
@@ -17,6 +17,7 @@ pub struct Demultiplexer {
     pub demultiplexing_done_tx: Sender<()>,
     pub video_decoder: ffmpeg::decoder::Video,
     pub audio_decoder: ffmpeg::decoder::Audio,
+    pub nal_length_size: u8,
 }
 
 impl Demultiplexer {
@@ -41,7 +42,133 @@ impl Demultiplexer {
             demultiplexing_done_tx,
             video_decoder,
             audio_decoder,
+            nal_length_size: 4,
         }
+    }
+
+    // Extract SPS and PPS from avcC box and send to decoder
+    fn configure_video_decoder(
+        &mut self,
+        avcc_data: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if avcc_data.len() < 7 {
+            return Err("avcC data too short".into());
+        }
+
+        // Parse avcC box structure
+        let _configuration_version = avcc_data[0];
+        let _avc_profile_indication = avcc_data[1];
+        let _profile_compatibility = avcc_data[2];
+        let _avc_level_indication = avcc_data[3];
+
+        // Extract NAL unit length size
+        self.nal_length_size = (avcc_data[4] & 0x03) + 1;
+
+        // Number of SPS NAL units
+        let num_sps = avcc_data[5] & 0x1F;
+        let mut offset = 6;
+
+        let mut extradata = Vec::new();
+
+        // Extract SPS
+        for _ in 0..num_sps {
+            if offset + 2 > avcc_data.len() {
+                return Err("Invalid avcC: not enough data for SPS length".into());
+            }
+
+            let sps_length =
+                u16::from_be_bytes([avcc_data[offset], avcc_data[offset + 1]]) as usize;
+            offset += 2;
+
+            if offset + sps_length > avcc_data.len() {
+                return Err("Invalid avcC: not enough data for SPS".into());
+            }
+
+            // Add start code
+            extradata.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
+            extradata.extend_from_slice(&avcc_data[offset..offset + sps_length]);
+            offset += sps_length;
+        }
+
+        // Number of PPS NAL units
+        if offset >= avcc_data.len() {
+            return Err("Invalid avcC: no PPS data".into());
+        }
+
+        let num_pps = avcc_data[offset];
+        offset += 1;
+
+        // Extract PPS
+        for _ in 0..num_pps {
+            if offset + 2 > avcc_data.len() {
+                return Err("Invalid avcC: not enough data for PPS length".into());
+            }
+
+            let pps_length =
+                u16::from_be_bytes([avcc_data[offset], avcc_data[offset + 1]]) as usize;
+            offset += 2;
+
+            if offset + pps_length > avcc_data.len() {
+                return Err("Invalid avcC: not enough data for PPS".into());
+            }
+
+            // Add start code
+            extradata.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
+            extradata.extend_from_slice(&avcc_data[offset..offset + pps_length]);
+            offset += pps_length;
+        }
+
+        // Send SPS/PPS as a packet to the decoder
+        if !extradata.is_empty() {
+            let packet = Packet::copy(&extradata);
+            match self.video_decoder.send_packet(&packet) {
+                Ok(_) => {
+                    println!("Successfully sent SPS/PPS to decoder");
+                }
+                Err(e) => {
+                    println!("Failed to send SPS/PPS: {:?}", e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    // Convert AVCC format to Annex B format (add start codes)
+    fn convert_avcc_to_annexb(&self, data: &[u8]) -> Vec<u8> {
+        let mut result = Vec::new();
+        let mut offset = 0;
+
+        while offset + self.nal_length_size as usize <= data.len() {
+            // Read NAL unit length
+            let nal_length = match self.nal_length_size {
+                1 => data[offset] as u32,
+                2 => u16::from_be_bytes([data[offset], data[offset + 1]]) as u32,
+                3 => u32::from_be_bytes([0, data[offset], data[offset + 1], data[offset + 2]]),
+                4 => u32::from_be_bytes([
+                    data[offset],
+                    data[offset + 1],
+                    data[offset + 2],
+                    data[offset + 3],
+                ]),
+                _ => break,
+            };
+
+            offset += self.nal_length_size as usize;
+
+            if offset + nal_length as usize > data.len() {
+                break;
+            }
+
+            // Add start code
+            result.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
+
+            // Add NAL unit data
+            result.extend_from_slice(&data[offset..offset + nal_length as usize]);
+            offset += nal_length as usize;
+        }
+
+        result
     }
 
     pub fn demux(&mut self) {
@@ -117,6 +244,20 @@ impl Demultiplexer {
                                     accumulated_data.drain(..(box_size - 8) as usize).collect(),
                                 ) {
                                     Ok(ok_box) => {
+                                        for trak in &ok_box.traks {
+                                            if let Some(ref avcc_data) =
+                                                trak.media.minf.stbl.stsd.avcc
+                                            {
+                                                if let Err(e) =
+                                                    self.configure_video_decoder(avcc_data)
+                                                {
+                                                    println!(
+                                                        "Failed to configure video decoder: {}",
+                                                        e
+                                                    );
+                                                }
+                                            }
+                                        }
                                         moov_box = Some(ok_box);
                                     }
                                     Err(error) => {
@@ -141,8 +282,9 @@ impl Demultiplexer {
                         }
                     }
                     if sample_data.is_some() {
-                        while accumulated_data.len()
-                            >= sample_data.as_ref().unwrap().front().unwrap().0 as usize
+                        while !sample_data.as_ref().unwrap().is_empty()
+                            && accumulated_data.len()
+                                >= sample_data.as_ref().unwrap().front().unwrap().0 as usize
                         {
                             let current_sample_data =
                                 sample_data.as_mut().unwrap().pop_front().unwrap();
@@ -152,40 +294,69 @@ impl Demultiplexer {
                                 .collect();
 
                             if current_sample_data.1 {
-                                // send to video decoder
-                                // add result to ContentQueue
-                                let mut frame = frame::Video::empty();
-                                frame.set_width(640);
-                                frame.set_height(360);
-                                self.video_decoder.send_packet(&Packet::copy(&sample));
-                                self.video_decoder.receive_frame(&mut frame);
+                                // Video sample - convert from AVCC to Annex B format
+                                let annexb_data = self.convert_avcc_to_annexb(&sample);
 
-                                // add result to ContentQueue
-                                self.rgb_frames_queue
-                                    .lock()
-                                    .unwrap()
-                                    .push_el(frame.data(0).to_vec());
+                                if !annexb_data.is_empty() {
+                                    let packet = Packet::copy(&annexb_data);
 
-                                println!(
-                                    "Video len {}",
-                                    self.rgb_frames_queue.lock().unwrap().len()
-                                );
+                                    match self.video_decoder.send_packet(&packet) {
+                                        Ok(_) => {
+                                            // Try to receive frames
+                                            let mut frame = frame::Video::empty();
+                                            while self
+                                                .video_decoder
+                                                .receive_frame(&mut frame)
+                                                .is_ok()
+                                            {
+                                                // Convert frame to RGB if needed
+                                                // For now, just store the raw frame data
+                                                let data = frame.data(0);
+
+                                                self.rgb_frames_queue
+                                                    .lock()
+                                                    .unwrap()
+                                                    .push_el(data.to_vec());
+
+                                                println!(
+                                                    "Decoded video frame, queue len: {}",
+                                                    self.rgb_frames_queue.lock().unwrap().len()
+                                                );
+
+                                                frame = frame::Video::empty(); // Reset for next frame
+                                            }
+                                        }
+                                        Err(e) => {
+                                            //                                            println!("Failed to send video packet: {:?}", e);
+                                        }
+                                    }
+                                }
                             } else {
-                                // send to audio decoder
-                                // let mut frame = frame::Audio::empty();
-                                // self.audio_decoder.send_packet(&Packet::copy(&sample));
-                                // self.audio_decoder.receive_frame(&mut frame);
+                                // Audio sample - AAC decoding
+                                let packet = Packet::copy(&sample);
 
-                                // add result to ContentQueue
-                                // self.audio_samples_queue
-                                // .lock()
-                                // .unwrap()
-                                // .push_el(frame.data(0).to_vec());
+                                match self.audio_decoder.send_packet(&packet) {
+                                    Ok(_) => {
+                                        let mut frame = frame::Audio::empty();
+                                        while self.audio_decoder.receive_frame(&mut frame).is_ok() {
+                                            let data = frame.data(0);
+                                            self.audio_samples_queue
+                                                .lock()
+                                                .unwrap()
+                                                .push_el(data.to_vec());
 
-                                // println!(
-                                // "Audio len {}",
-                                // self.audio_samples_queue.lock().unwrap().len()
-                                // );
+                                            println!(
+                                                "Decoded audio frame, queue len: {}",
+                                                self.audio_samples_queue.lock().unwrap().len()
+                                            );
+
+                                            frame = frame::Audio::empty(); // Reset for next frame
+                                        }
+                                    }
+                                    Err(e) => {
+                                        //                                       println!("Failed to send audio packet: {:?}", e);
+                                    }
+                                }
                             }
                         }
                     }
