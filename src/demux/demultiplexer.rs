@@ -61,13 +61,12 @@ impl Demultiplexer {
 
     fn get_bit(&self, byte: u8, bit_index: u8) -> u8 {
         if bit_index >= 8 {
-            // Handle error: bit_index must be between 0 and 7
             panic!("Bit index out of bounds: {}", bit_index);
         }
+
         ((byte & (1 << bit_index)) != 0).try_into().unwrap()
     }
     fn convert_avcc_to_annexb(&self, data: &[u8]) -> Vec<u8> {
-        println!("data length before conversion: {}", data.len());
         let mut result = Vec::new();
         let mut offset = 0;
 
@@ -85,8 +84,6 @@ impl Demultiplexer {
                 _ => break,
             };
 
-            println!("Nal length: {}", nal_length);
-
             offset += self.nal_length_size as usize;
 
             if offset + nal_length as usize > data.len() {
@@ -98,7 +95,6 @@ impl Demultiplexer {
             result.extend_from_slice(&data[offset..offset + nal_length as usize]);
             offset += nal_length as usize;
         }
-        println!("Result: {:?}", result);
         result
     }
 
@@ -175,7 +171,6 @@ impl Demultiplexer {
                                             .collect(),
                                     });
 
-                                    println!("Ftyp parsed, size {}", box_size);
                                     assert_eq!(box_size, ftyp_box.as_ref().unwrap().size);
                                     parsed_bytes += box_size - 8;
                                 }
@@ -191,7 +186,6 @@ impl Demultiplexer {
                                             panic!("{}", error);
                                         }
                                     }
-                                    println!("Moov parsed, size {}", box_size);
 
                                     assert_eq!(box_size, moov_box.as_ref().unwrap().size);
 
@@ -220,13 +214,15 @@ impl Demultiplexer {
                                     if sample_data.clone().is_none() {
                                         println!("We are f'ed in the B by moov");
                                     }
-                                    println!("We parsed {} bytes so far", parsed_bytes);
+
+                                    println!("Bytes parsed for moov and ftyp: {}", parsed_bytes);
+
                                     mdat_reached = true;
 
                                     break;
                                 }
                                 _ => {
-                                    println!(
+                                    panic!(
                                         "So this is new, we got a {} box",
                                         box_title.to_string()
                                     );
@@ -269,8 +265,6 @@ impl Demultiplexer {
                                                 .receive_frame(&mut frame)
                                                 .is_ok()
                                             {
-                                                // Convert frame to RGB if needed
-                                                // For now, just store the raw frame data
                                                 let data = frame.data(0);
 
                                                 self.rgb_frames_queue
@@ -283,7 +277,7 @@ impl Demultiplexer {
                                                     self.rgb_frames_queue.lock().unwrap().len()
                                                 );
 
-                                                frame = frame::Video::empty(); // Reset for next frame
+                                                frame = frame::Video::empty();
                                             }
                                         }
                                         Err(e) => {

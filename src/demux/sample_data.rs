@@ -133,13 +133,6 @@ fn parse_stsc(stsc: &STSCBox, chunk_offsets: Vec<u32>) -> Vec<(u32, u32)> {
             }
         }
 
-        if chunk_index == 0 {
-            println!(
-                "First chunk with offset {} has {} samples",
-                chunk_offset, tuple.1
-            );
-        }
-
         result.push(tuple);
     }
 
@@ -159,7 +152,6 @@ fn parse_stsz(
             u32::from_be_bytes(bytes)
         })
         .collect();
-    println!("{:?}", data);
 
     let general_size = data[1];
 
@@ -189,8 +181,6 @@ fn parse_stsz(
                     .to_vec(),
             };
             current_index += *sample_count as usize;
-
-            println!("Chunk data: {:?}", chunk_data);
 
             chunk_data
         })
