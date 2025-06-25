@@ -334,14 +334,12 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
         data: data.drain(..(stsd_size - 8) as usize).collect(),
         avcc: None,
     };
-    // Get the version and flags (4 bytes) and entry_count (4 bytes)
-    // stsd_box.data contains version, flags, entry_count, and then sample description entries.
+
     let _version_flags = u32::from_be_bytes(stsd_box.data[0..4].try_into().unwrap());
     let entry_count = u32::from_be_bytes(stsd_box.data[4..8].try_into().unwrap());
 
-    // Assuming only one entry for now, typically for video or audio streams
     if entry_count >= 1 {
-        let mut current_offset_in_stsd_data = 8; // Offset after version, flags, and entry_count
+        let mut current_offset_in_stsd_data = 8;
 
         // Read the size and format of the first sample description entry
         if stsd_box.data.len() >= current_offset_in_stsd_data + 8 {
@@ -351,23 +349,20 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
                     .try_into()
                     .unwrap(),
             );
+
             current_offset_in_stsd_data += 4;
+
             let format_bytes =
                 &stsd_box.data[current_offset_in_stsd_data..current_offset_in_stsd_data + 4];
             let format = String::from_utf8_lossy(format_bytes);
+
             current_offset_in_stsd_data += 4;
 
             if format == "avc1" {
-                // The avc1 sample description box has a fixed header of 78 bytes after size and format
-                // The avcC box typically follows this fixed header within the avc1 entry.
                 let avc_header_fixed_size: usize = 78; // Bytes for avc1 specific fields before any sub-boxes
 
-                // Absolute offset in stsd_box.data for avcC box header (size + title)
-                // It's `current_offset_in_stsd_data` (which is 8 bytes after version/flags/entry_count for 'avc1' format)
-                // plus 78 bytes for avc1 specific header fields.
                 let avcc_offset_in_stsd_data = current_offset_in_stsd_data + avc_header_fixed_size;
 
-                // Check if there is enough data for avcC box header (size + title)
                 if stsd_box.data.len() >= avcc_offset_in_stsd_data + 8 {
                     let avcc_size = u32::from_be_bytes(
                         stsd_box.data[avcc_offset_in_stsd_data..avcc_offset_in_stsd_data + 4]
@@ -380,7 +375,7 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
 
                     if avcc_title == "avcC" {
                         let avcc_data_start = avcc_offset_in_stsd_data + 8;
-                        // The avcC box size includes its own 8-byte header (size + title)
+
                         let avcc_data_len = (avcc_size - 8) as usize;
                         let avcc_data_end = avcc_data_start + avcc_data_len;
 

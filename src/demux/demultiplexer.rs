@@ -59,13 +59,19 @@ impl Demultiplexer {
         }
     }
 
-    // Convert AVCC format to Annex B format (add start codes)
+    fn get_bit(&self, byte: u8, bit_index: u8) -> u8 {
+        if bit_index >= 8 {
+            // Handle error: bit_index must be between 0 and 7
+            panic!("Bit index out of bounds: {}", bit_index);
+        }
+        ((byte & (1 << bit_index)) != 0).try_into().unwrap()
+    }
     fn convert_avcc_to_annexb(&self, data: &[u8]) -> Vec<u8> {
+        println!("data length before conversion: {}", data.len());
         let mut result = Vec::new();
         let mut offset = 0;
 
         while offset + self.nal_length_size as usize <= data.len() {
-            // Read NAL unit length
             let nal_length = match self.nal_length_size {
                 1 => data[offset] as u32,
                 2 => u16::from_be_bytes([data[offset], data[offset + 1]]) as u32,
@@ -79,20 +85,20 @@ impl Demultiplexer {
                 _ => break,
             };
 
+            println!("Nal length: {}", nal_length);
+
             offset += self.nal_length_size as usize;
 
             if offset + nal_length as usize > data.len() {
                 break;
             }
 
-            // Add start code
             result.extend_from_slice(&[0x00, 0x00, 0x00, 0x01]);
 
-            // Add NAL unit data
             result.extend_from_slice(&data[offset..offset + nal_length as usize]);
             offset += nal_length as usize;
         }
-
+        println!("Result: {:?}", result);
         result
     }
 
@@ -177,6 +183,18 @@ impl Demultiplexer {
                                 }
                                 println!("Moov parsed");
 
+                                for trak in &moov_box.as_ref().unwrap().traks {
+                                    if let Some(ref avcc_data) = trak.media.minf.stbl.stsd.avcc {
+                                        self.nal_length_size = self.get_bit(avcc_data[4], 0)
+                                            + self.get_bit(avcc_data[4], 1) * 2
+                                            + 1;
+                                        println!(
+                                            "Setting nal_length_size to {}",
+                                            self.nal_length_size
+                                        );
+                                    }
+                                }
+
                                 sample_data = Some(extract_sample_data(moov_box.unwrap()).unwrap());
                             }
                             "mdat" => {
@@ -193,6 +211,7 @@ impl Demultiplexer {
                             }
                         }
                     }
+
                     if sample_data.is_some() {
                         while !sample_data.as_ref().unwrap().is_empty()
                             && accumulated_data.len()
@@ -201,21 +220,23 @@ impl Demultiplexer {
                             let current_sample_data =
                                 sample_data.as_mut().unwrap().pop_front().unwrap();
 
+                            println!(
+                                "Sample data len: {}, is_video: {:?}",
+                                current_sample_data.0, current_sample_data.1
+                            );
+
                             let sample: Bytes = accumulated_data
                                 .drain(..current_sample_data.0 as usize)
                                 .collect();
 
                             if current_sample_data.1 {
-                                // Video sample - convert from AVCC to Annex B format
                                 let annexb_data = self.convert_avcc_to_annexb(&sample);
-
                                 if !annexb_data.is_empty() {
+                                    println!("We here");
                                     let packet = Packet::copy(&annexb_data);
-                                    println!("{}", packet.is_corrupt());
 
                                     match self.video_decoder.send_packet(&packet) {
                                         Ok(_) => {
-                                            // Try to receive frames
                                             println!("Send video frame ok");
                                             let mut frame = frame::Video::empty();
                                             while self
@@ -246,10 +267,8 @@ impl Demultiplexer {
                                     }
                                 }
                             } else {
-                                // Audio sample - AAC decoding
                                 let packet = Packet::copy(&sample);
 
-                                println!("{}", packet.is_corrupt());
                                 match self.audio_decoder.send_packet(&packet) {
                                     Ok(_) => {
                                         let mut frame = frame::Audio::empty();
