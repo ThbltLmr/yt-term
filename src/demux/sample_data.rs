@@ -2,7 +2,12 @@ use std::{collections::VecDeque, error::Error, usize};
 
 use super::moov::{MOOVBox, STCOBox, STSCBox, STSZBox, Streams};
 
-pub type SampleData = (u32, bool);
+#[derive(Clone, Debug)]
+pub struct SampleData {
+    pub offset: u32,
+    pub size: u32,
+    pub is_video: bool,
+}
 
 #[derive(Debug)]
 pub struct ChunkData {
@@ -53,6 +58,8 @@ fn format_sample_data(chunk_data: VecDeque<ChunkData>) -> VecDeque<SampleData> {
     chunk_data_vec.sort_by(|a, b| a.offset.cmp(&b.offset));
     assert!(chunk_data_vec[0].offset < chunk_data_vec[1].offset);
 
+    let mut sample_offsets_sum = 0;
+
     chunk_data_vec
         .iter()
         .flat_map(|chunk| {
@@ -60,7 +67,13 @@ fn format_sample_data(chunk_data: VecDeque<ChunkData>) -> VecDeque<SampleData> {
                 .sample_sizes
                 .iter()
                 .map(|size| {
-                    let sample_data: SampleData = (*size, chunk.is_video);
+                    let sample_data: SampleData = SampleData {
+                        size: *size,
+                        is_video: chunk.is_video,
+                        offset: chunk.offset + sample_offsets_sum,
+                    };
+
+                    sample_offsets_sum += *size;
                     sample_data
                 })
                 .collect::<VecDeque<SampleData>>()
@@ -146,6 +159,7 @@ fn parse_stsz(
             u32::from_be_bytes(bytes)
         })
         .collect();
+    println!("{:?}", data);
 
     let general_size = data[1];
 
@@ -161,7 +175,7 @@ fn parse_stsz(
             .collect();
     }
 
-    let sizes: Vec<u32> = data[2..].to_vec();
+    let sizes: Vec<u32> = data[3..].to_vec();
     let mut current_index = 0;
 
     chunk_offsets_with_sample_count
