@@ -106,7 +106,7 @@ impl Demultiplexer {
                 "--no-part",
                 "-f",
                 "18",
-                "https://www.youtube.com/watch?v=MvsAesQ-4zA",
+                "www.youtube.com/watch?v=dQw4w9WgXcQ",
             ])
             .stderr(Stdio::null())
             .stdout(Stdio::piped())
@@ -298,12 +298,13 @@ impl Demultiplexer {
                                                 .unwrap()
                                                 .push_el(data.to_vec());
 
+                                            println!("Audio frame size{}", data.len());
                                             println!(
                                                 "Decoded audio frame, queue len: {}",
                                                 self.audio_samples_queue.lock().unwrap().len()
                                             );
 
-                                            frame = frame::Audio::empty(); // Reset for next frame
+                                            frame = frame::Audio::empty();
                                         }
                                     }
                                     Err(e) => {

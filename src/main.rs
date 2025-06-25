@@ -40,7 +40,7 @@ fn main() {
     ffmpeg_next::init().unwrap();
     let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
-    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+    // let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
 
@@ -58,8 +58,6 @@ fn main() {
         demux.demux();
     });
 
-    let (audio_streaming_done_tx, audio_streaming_done_rx) = channel();
-    let (video_streaming_done_tx, video_streaming_done_rx) = channel();
     let (video_encoding_done_tx, video_encoding_done_rx) = channel();
 
     let (audio_queueing_done_tx, audio_queueing_done_rx) = channel();
@@ -67,40 +65,12 @@ fn main() {
 
     let (playing_done_tx, playing_done_rx) = channel();
 
-    let audio_streamer = audio::streamer::AudioStreamer::new(
-        audio_buffer.clone(),
-        url.clone(),
-        audio_streaming_done_tx,
-    )
-    .expect("Failed to create audio streamer");
-
-    thread::spawn(move || {
-        audio_streamer
-            .stream()
-            .expect("Failed to start audio streaming");
-    });
-
-    let video_streamer = video::streamer::VideoStreamer::new(
-        raw_video_buffer.clone(),
-        video_streaming_done_tx,
-        url.clone(),
-        width,
-        height,
-    )
-    .expect("Failed to create video streamer");
-
-    thread::spawn(move || {
-        video_streamer
-            .stream()
-            .expect("Failed to start video streaming");
-    });
-
     let mut encoder = video::encoder::Encoder::new(
         raw_video_buffer.clone(),
         encoded_video_buffer.clone(),
         width,
         height,
-        video_streaming_done_rx,
+        demultiplexing_done_rx,
         video_encoding_done_tx,
     )
     .expect("Failed to create encoder");
@@ -149,8 +119,7 @@ fn main() {
     });
 
     loop {
-        if audio_streaming_done_rx.try_recv().is_ok()
-            && video_encoding_done_rx.try_recv().is_ok()
+        if video_encoding_done_rx.try_recv().is_ok()
             && encoded_video_buffer.lock().unwrap().is_empty()
             && audio_buffer.lock().unwrap().is_empty()
         {
