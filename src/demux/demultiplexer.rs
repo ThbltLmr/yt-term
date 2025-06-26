@@ -253,7 +253,6 @@ impl Demultiplexer {
                             if current_sample_data.is_video {
                                 let annexb_data = self.convert_avcc_to_annexb(&sample);
                                 if !annexb_data.is_empty() {
-                                    println!("We here");
                                     let packet = Packet::copy(&annexb_data);
 
                                     match self.video_decoder.send_packet(&packet) {
