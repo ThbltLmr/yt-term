@@ -126,6 +126,11 @@ impl Demultiplexer {
         let mut parsed_bytes = 0;
         let mut mdat_reached = false;
 
+        let mut converter = self
+            .video_decoder
+            .converter(ffmpeg_next::format::Pixel::RGB24)
+            .unwrap();
+
         loop {
             match yt_dlp_stdout.read(&mut buffer) {
                 Ok(0) => break,
@@ -197,10 +202,6 @@ impl Demultiplexer {
                                             self.nal_length_size = self.get_bit(avcc_data[4], 0)
                                                 + self.get_bit(avcc_data[4], 1) * 2
                                                 + 1;
-                                            println!(
-                                                "Setting nal_length_size to {}",
-                                                self.nal_length_size
-                                            );
                                         }
                                     }
 
@@ -250,20 +251,25 @@ impl Demultiplexer {
 
                                     match self.video_decoder.send_packet(&packet) {
                                         Ok(_) => {
-                                            let mut frame = frame::Video::empty();
+                                            let mut yup_frame = frame::Video::empty();
+                                            let mut rgb_frame = frame::Video::empty();
                                             while self
                                                 .video_decoder
-                                                .receive_frame(&mut frame)
+                                                .receive_frame(&mut yup_frame)
                                                 .is_ok()
                                             {
-                                                let data = frame.data(0);
+                                                let _ = converter.run(&yup_frame, &mut rgb_frame);
+                                                let data = rgb_frame.data(0);
+
+                                                assert_eq!(data.len(), 640 * 360 * 3);
 
                                                 self.rgb_frames_queue
                                                     .lock()
                                                     .unwrap()
                                                     .push_el(data.to_vec());
 
-                                                frame = frame::Video::empty();
+                                                yup_frame = frame::Video::empty();
+                                                rgb_frame = frame::Video::empty();
                                             }
                                         }
                                         Err(e) => {
@@ -283,11 +289,6 @@ impl Demultiplexer {
                                                 .lock()
                                                 .unwrap()
                                                 .push_el(data.to_vec());
-
-                                            println!(
-                                                "Decoded audio frame, queue len: {}",
-                                                self.audio_samples_queue.lock().unwrap().len()
-                                            );
 
                                             frame = frame::Audio::empty();
                                         }

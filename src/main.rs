@@ -9,7 +9,6 @@ mod helpers {
 mod video {
     pub mod adapter;
     pub mod encoder;
-    pub mod streamer;
 }
 
 mod audio {
@@ -37,9 +36,10 @@ use helpers::{
 
 fn main() {
     ffmpeg_next::init().unwrap();
+
     let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
-    // let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
 
@@ -83,7 +83,7 @@ fn main() {
 
     let audio_adapter = audio::adapter::AudioAdapter::new(
         Duration::from_millis(24),
-        audio_buffer.clone(),
+        ready_audio_buffer.clone(),
         audio_queueing_done_rx,
     )
     .expect("Failed to create audio adapter");
@@ -100,7 +100,7 @@ fn main() {
     .expect("Failed to create video adapter");
 
     thread::spawn(move || {
-        //video_adapter.run().expect("Failed to start video display");
+        video_adapter.run().expect("Failed to start video display");
     });
 
     let mut logger = helpers::logger::Logger::new(
@@ -139,10 +139,10 @@ fn main() {
         if audio_buffer.lock().unwrap().has_one_second_ready()
             && encoded_video_buffer.lock().unwrap().has_one_second_ready()
         {
-            //audio_buffer
-            //.lock()
-            //.unwrap()
-            //.queue_one_second_into(ready_audio_buffer.clone());
+            audio_buffer
+                .lock()
+                .unwrap()
+                .queue_one_second_into(ready_audio_buffer.clone());
 
             encoded_video_buffer
                 .lock()
