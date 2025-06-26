@@ -67,20 +67,16 @@ impl Adapter for AudioAdapter {
 }
 
 impl AudioAdapter {
-    // Convert planar f32 stereo to interleaved f32 stereo
     fn planar_to_interleaved(&self, planar_data: &[u8]) -> Vec<u8> {
-        // Convert bytes to f32 samples - 4 bytes per f32, 2 channels
         let samples_per_channel = planar_data.len() / (4 * 2);
         let mut left_channel = Vec::with_capacity(samples_per_channel);
         let mut right_channel = Vec::with_capacity(samples_per_channel);
 
-        // Extract left channel (first half)
         for chunk in planar_data[..planar_data.len() / 2].chunks_exact(4) {
             let sample = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
             left_channel.push(sample);
         }
 
-        // Extract right channel (second half)
         for chunk in planar_data[planar_data.len() / 2..].chunks_exact(4) {
             let sample = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
             right_channel.push(sample);
