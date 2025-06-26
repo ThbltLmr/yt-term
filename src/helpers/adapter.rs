@@ -11,7 +11,7 @@ use super::{
 pub trait Adapter {
     fn new(
         interval: Duration,
-        buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        buffer: Arc<Mutex<ContentQueue>>,
         producer_done_rx: Receiver<()>,
     ) -> Res<Self>
     where
@@ -19,7 +19,7 @@ pub trait Adapter {
 
     fn process_element(&self, element: Bytes) -> Res<()>;
 
-    fn get_buffer(&self) -> Arc<Mutex<ContentQueue<Bytes>>>;
+    fn get_buffer(&self) -> Arc<Mutex<ContentQueue>>;
 
     fn is_buffer_empty(&self) -> bool {
         self.get_buffer().lock().unwrap().is_empty()

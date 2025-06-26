@@ -9,12 +9,16 @@ mod helpers {
 mod video {
     pub mod adapter;
     pub mod encoder;
-    pub mod streamer;
 }
 
 mod audio {
     pub mod adapter;
-    pub mod streamer;
+}
+
+mod demux {
+    pub mod demultiplexer;
+    mod moov;
+    mod sample_data;
 }
 
 use std::{
@@ -23,24 +27,36 @@ use std::{
     time::Duration,
 };
 
+use demux::demultiplexer::Demultiplexer;
 use helpers::{
     adapter::Adapter,
     args::{parse_args, Args},
     structs::{ContentQueue, ScreenGuard},
-    types::Bytes,
 };
 
 fn main() {
+    ffmpeg_next::init().unwrap();
+
+    let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
+
     let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
 
-    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
-    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
-    let audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
+    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+    let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(43)));
 
-    let (audio_streaming_done_tx, audio_streaming_done_rx) = channel();
-    let (video_streaming_done_tx, video_streaming_done_rx) = channel();
+    let mut demux = Demultiplexer::new(
+        raw_video_buffer.clone(),
+        audio_buffer.clone(),
+        demultiplexing_done_tx,
+    );
+
+    thread::spawn(move || {
+        demux.demux();
+    });
+
     let (video_encoding_done_tx, video_encoding_done_rx) = channel();
 
     let (audio_queueing_done_tx, audio_queueing_done_rx) = channel();
@@ -48,40 +64,12 @@ fn main() {
 
     let (playing_done_tx, playing_done_rx) = channel();
 
-    let audio_streamer = audio::streamer::AudioStreamer::new(
-        audio_buffer.clone(),
-        url.clone(),
-        audio_streaming_done_tx,
-    )
-    .expect("Failed to create audio streamer");
-
-    thread::spawn(move || {
-        audio_streamer
-            .stream()
-            .expect("Failed to start audio streaming");
-    });
-
-    let video_streamer = video::streamer::VideoStreamer::new(
-        raw_video_buffer.clone(),
-        video_streaming_done_tx,
-        url.clone(),
-        width,
-        height,
-    )
-    .expect("Failed to create video streamer");
-
-    thread::spawn(move || {
-        video_streamer
-            .stream()
-            .expect("Failed to start video streaming");
-    });
-
     let mut encoder = video::encoder::Encoder::new(
         raw_video_buffer.clone(),
         encoded_video_buffer.clone(),
         width,
         height,
-        video_streaming_done_rx,
+        demultiplexing_done_rx,
         video_encoding_done_tx,
     )
     .expect("Failed to create encoder");
@@ -90,11 +78,11 @@ fn main() {
         encoder.encode().expect("Failed to start encoding");
     });
 
-    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(1)));
-    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::<Bytes>::new(25)));
+    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(43)));
+    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
 
     let audio_adapter = audio::adapter::AudioAdapter::new(
-        Duration::from_secs(1),
+        Duration::from_millis(24),
         ready_audio_buffer.clone(),
         audio_queueing_done_rx,
     )
@@ -105,7 +93,7 @@ fn main() {
     });
 
     let video_adapter = video::adapter::TerminalAdapter::new(
-        Duration::from_millis(40),
+        Duration::from_millis(33),
         ready_video_buffer.clone(),
         video_queueing_done_rx,
     )
@@ -130,8 +118,7 @@ fn main() {
     });
 
     loop {
-        if audio_streaming_done_rx.try_recv().is_ok()
-            && video_encoding_done_rx.try_recv().is_ok()
+        if video_encoding_done_rx.try_recv().is_ok()
             && encoded_video_buffer.lock().unwrap().is_empty()
             && audio_buffer.lock().unwrap().is_empty()
         {

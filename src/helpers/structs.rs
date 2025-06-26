@@ -2,14 +2,14 @@ use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use super::types::Res;
+use super::types::{Bytes, Res};
 
-pub struct ContentQueue<T> {
-    elements: VecDeque<T>,
+pub struct ContentQueue {
+    elements: VecDeque<Bytes>,
     el_per_second: usize,
 }
 
-impl<T> ContentQueue<T> {
+impl ContentQueue {
     pub fn new(el_per_second: usize) -> Self {
         ContentQueue {
             elements: VecDeque::new(),
@@ -21,23 +21,23 @@ impl<T> ContentQueue<T> {
         self.elements.len() >= self.el_per_second
     }
 
-    pub fn queue_one_second_into(&mut self, queue: Arc<Mutex<ContentQueue<T>>>) {
+    pub fn queue_one_second_into(&mut self, queue: Arc<Mutex<ContentQueue>>) {
         let mut queue = queue.lock().unwrap();
         let elements = self.pop_one_second();
         queue.push_elements(elements);
     }
 
-    pub fn push_el(&mut self, element: T) {
+    pub fn push_el(&mut self, element: Bytes) {
         self.elements.push_back(element);
     }
 
-    fn push_elements(&mut self, elements: Vec<T>) {
+    fn push_elements(&mut self, elements: Vec<Bytes>) {
         for element in elements {
             self.elements.push_back(element);
         }
     }
 
-    pub fn pop_one_second(&mut self) -> Vec<T> {
+    pub fn pop_one_second(&mut self) -> Vec<Bytes> {
         let mut elements = Vec::new();
         for _ in 0..self.el_per_second {
             if let Some(el) = self.elements.pop_front() {
@@ -49,7 +49,7 @@ impl<T> ContentQueue<T> {
         elements
     }
 
-    pub fn get_el(&mut self) -> Option<T> {
+    pub fn get_el(&mut self) -> Option<Bytes> {
         self.elements.pop_front()
     }
 
@@ -59,6 +59,10 @@ impl<T> ContentQueue<T> {
 
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
+    }
+
+    pub fn bytes_len(&self) -> usize {
+        self.elements.iter().map(|el| el.len()).sum()
     }
 }
 

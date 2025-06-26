@@ -9,14 +9,14 @@ use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
     interval: Duration,
-    buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+    buffer: Arc<Mutex<ContentQueue>>,
     producer_done_rx: Receiver<()>,
 }
 
 impl Adapter for TerminalAdapter {
     fn new(
         interval: Duration,
-        buffer: Arc<Mutex<ContentQueue<Bytes>>>,
+        buffer: Arc<Mutex<ContentQueue>>,
         producer_done_rx: Receiver<()>,
     ) -> Res<Self> {
         Ok(TerminalAdapter {
@@ -26,7 +26,7 @@ impl Adapter for TerminalAdapter {
         })
     }
 
-    fn get_buffer(&self) -> Arc<Mutex<ContentQueue<Bytes>>> {
+    fn get_buffer(&self) -> Arc<Mutex<ContentQueue>> {
         self.buffer.clone()
     }
 
