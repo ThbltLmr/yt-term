@@ -44,8 +44,8 @@ fn main() {
 
     let Args { url, width, height } = parse_args();
 
-    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(25)));
-    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(25)));
+    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
     let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
 
     let mut demux = Demultiplexer::new(
@@ -80,7 +80,7 @@ fn main() {
     });
 
     let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(25)));
+    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
 
     let audio_adapter = audio::adapter::AudioAdapter::new(
         Duration::from_secs(1),
@@ -94,7 +94,7 @@ fn main() {
     });
 
     let video_adapter = video::adapter::TerminalAdapter::new(
-        Duration::from_millis(40),
+        Duration::from_millis(33),
         ready_video_buffer.clone(),
         video_queueing_done_rx,
     )
