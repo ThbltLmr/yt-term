@@ -14,7 +14,6 @@ mod video {
 
 mod audio {
     pub mod adapter;
-    pub mod streamer;
 }
 
 mod demux {
@@ -83,7 +82,7 @@ fn main() {
     let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
 
     let audio_adapter = audio::adapter::AudioAdapter::new(
-        Duration::from_millis(23),
+        Duration::from_millis(24),
         audio_buffer.clone(),
         audio_queueing_done_rx,
     )
