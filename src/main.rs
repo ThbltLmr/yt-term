@@ -46,7 +46,7 @@ fn main() {
 
     let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
     let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-    let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+    let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(43)));
 
     let mut demux = Demultiplexer::new(
         raw_video_buffer.clone(),
@@ -79,12 +79,12 @@ fn main() {
         encoder.encode().expect("Failed to start encoding");
     });
 
-    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
+    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(43)));
     let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
 
     let audio_adapter = audio::adapter::AudioAdapter::new(
-        Duration::from_secs(1),
-        ready_audio_buffer.clone(),
+        Duration::from_millis(23),
+        audio_buffer.clone(),
         audio_queueing_done_rx,
     )
     .expect("Failed to create audio adapter");
@@ -101,7 +101,7 @@ fn main() {
     .expect("Failed to create video adapter");
 
     thread::spawn(move || {
-        video_adapter.run().expect("Failed to start video display");
+        //video_adapter.run().expect("Failed to start video display");
     });
 
     let mut logger = helpers::logger::Logger::new(
@@ -140,10 +140,10 @@ fn main() {
         if audio_buffer.lock().unwrap().has_one_second_ready()
             && encoded_video_buffer.lock().unwrap().has_one_second_ready()
         {
-            audio_buffer
-                .lock()
-                .unwrap()
-                .queue_one_second_into(ready_audio_buffer.clone());
+            //audio_buffer
+            //.lock()
+            //.unwrap()
+            //.queue_one_second_into(ready_audio_buffer.clone());
 
             encoded_video_buffer
                 .lock()

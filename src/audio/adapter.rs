@@ -24,9 +24,9 @@ impl Adapter for AudioAdapter {
         producer_done_rx: Receiver<()>,
     ) -> Res<Self> {
         let spec = Spec {
-            format: Format::S16le, // 16-bit signed little endian
-            channels: 2,           // stereo
-            rate: 48000,           // 48kHz sample rate
+            format: Format::F32le,
+            channels: 2,
+            rate: 44100,
         };
 
         let simple = Simple::new(

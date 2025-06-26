@@ -239,13 +239,6 @@ impl Demultiplexer {
                             let current_sample_data =
                                 sample_data.as_mut().unwrap().pop_front().unwrap();
 
-                            println!(
-                                "Sample data len: {}, is_video: {:?}",
-                                current_sample_data.size, current_sample_data.is_video
-                            );
-
-                            println!("Current offset: {parsed_bytes}");
-
                             let sample: Bytes = accumulated_data
                                 .drain(..current_sample_data.size as usize)
                                 .collect();
@@ -257,7 +250,6 @@ impl Demultiplexer {
 
                                     match self.video_decoder.send_packet(&packet) {
                                         Ok(_) => {
-                                            println!("Send video frame ok");
                                             let mut frame = frame::Video::empty();
                                             while self
                                                 .video_decoder
@@ -270,11 +262,6 @@ impl Demultiplexer {
                                                     .lock()
                                                     .unwrap()
                                                     .push_el(data.to_vec());
-
-                                                println!(
-                                                    "Decoded video frame, queue len: {}",
-                                                    self.rgb_frames_queue.lock().unwrap().len()
-                                                );
 
                                                 frame = frame::Video::empty();
                                             }
@@ -297,7 +284,6 @@ impl Demultiplexer {
                                                 .unwrap()
                                                 .push_el(data.to_vec());
 
-                                            println!("Audio frame size{}", data.len());
                                             println!(
                                                 "Decoded audio frame, queue len: {}",
                                                 self.audio_samples_queue.lock().unwrap().len()
