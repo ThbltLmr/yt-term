@@ -12,6 +12,7 @@ use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::Bytes;
 
 pub struct Demultiplexer {
+    pub url: String,
     pub rgb_frames_queue: Arc<Mutex<ContentQueue>>,
     pub audio_samples_queue: Arc<Mutex<ContentQueue>>,
     pub demultiplexing_done_tx: Sender<()>,
@@ -25,6 +26,7 @@ impl Demultiplexer {
         rgb_frames_queue: Arc<Mutex<ContentQueue>>,
         audio_samples_queue: Arc<Mutex<ContentQueue>>,
         demultiplexing_done_tx: Sender<()>,
+        url: String,
     ) -> Self {
         let input = ffmpeg::format::input("/home/Thibault/Downloads/sample.mp4").unwrap();
         let video_context = ffmpeg::codec::context::Context::from_parameters(
@@ -56,6 +58,7 @@ impl Demultiplexer {
             video_decoder,
             audio_decoder,
             nal_length_size: 4,
+            url,
         }
     }
 

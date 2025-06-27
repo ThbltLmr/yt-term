@@ -51,6 +51,7 @@ fn main() {
         raw_video_buffer.clone(),
         audio_buffer.clone(),
         demultiplexing_done_tx,
+        url,
     );
 
     thread::spawn(move || {
