@@ -61,6 +61,8 @@ fn main() {
         audio_buffer.clone(),
         demultiplexing_done_tx,
         url,
+        frame_interval_ms,
+        sample_interval_ms,
     );
 
     thread::spawn(move || {

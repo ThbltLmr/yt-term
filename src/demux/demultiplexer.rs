@@ -19,6 +19,8 @@ pub struct Demultiplexer {
     pub video_decoder: ffmpeg::decoder::Video,
     pub audio_decoder: ffmpeg::decoder::Audio,
     pub nal_length_size: u8,
+    frame_interval_ms: usize,
+    sample_interval_ms: usize,
 }
 
 impl Demultiplexer {
@@ -27,6 +29,8 @@ impl Demultiplexer {
         audio_samples_queue: Arc<Mutex<ContentQueue>>,
         demultiplexing_done_tx: Sender<()>,
         url: String,
+        frame_interval_ms: usize,
+        sample_interval_ms: usize,
     ) -> Self {
         let input = ffmpeg::format::input("/home/Thibault/Downloads/sample.mp4").unwrap();
         let video_context = ffmpeg::codec::context::Context::from_parameters(
@@ -59,6 +63,8 @@ impl Demultiplexer {
             audio_decoder,
             nal_length_size: 4,
             url,
+            frame_interval_ms,
+            sample_interval_ms,
         }
     }
 
@@ -103,14 +109,7 @@ impl Demultiplexer {
 
     pub fn demux(&mut self) {
         let mut yt_dlp_process = Command::new("yt-dlp")
-            .args([
-                "-o",
-                "-",
-                "--no-part",
-                "-f",
-                "18",
-                "www.youtube.com/watch?v=dQw4w9WgXcQ",
-            ])
+            .args(["-o", "-", "--no-part", "-f", "18", &self.url])
             .stderr(Stdio::null())
             .stdout(Stdio::piped())
             .spawn()
@@ -132,6 +131,9 @@ impl Demultiplexer {
             .video_decoder
             .converter(ffmpeg_next::format::Pixel::RGB24)
             .unwrap();
+
+        let mut audio_timestamp_in_ms = 0;
+        let mut video_timestamp_in_ms = 0;
 
         loop {
             match yt_dlp_stdout.read(&mut buffer) {
@@ -235,7 +237,7 @@ impl Demultiplexer {
                             let current_sample_data =
                                 sample_data.as_mut().unwrap().pop_front().unwrap();
 
-                            let sample: BytesWithTimestamp = accumulated_data
+                            let sample: Vec<u8> = accumulated_data
                                 .drain(..current_sample_data.size as usize)
                                 .collect();
 
@@ -258,11 +260,14 @@ impl Demultiplexer {
 
                                                 assert_eq!(data.len(), 640 * 360 * 3);
 
-                                                self.rgb_frames_queue
-                                                    .lock()
-                                                    .unwrap()
-                                                    .push_el(data.to_vec());
+                                                self.rgb_frames_queue.lock().unwrap().push_el(
+                                                    BytesWithTimestamp {
+                                                        data: data.to_vec(),
+                                                        timestamp_in_ms: video_timestamp_in_ms,
+                                                    },
+                                                );
 
+                                                video_timestamp_in_ms += self.frame_interval_ms;
                                                 yup_frame = frame::Video::empty();
                                                 rgb_frame = frame::Video::empty();
                                             }
@@ -283,11 +288,14 @@ impl Demultiplexer {
 
                                             assert_eq!(data.len(), 8192);
 
-                                            self.audio_samples_queue
-                                                .lock()
-                                                .unwrap()
-                                                .push_el(data.to_vec());
+                                            self.audio_samples_queue.lock().unwrap().push_el(
+                                                BytesWithTimestamp {
+                                                    data: data.to_vec(),
+                                                    timestamp_in_ms: audio_timestamp_in_ms,
+                                                },
+                                            );
 
+                                            audio_timestamp_in_ms += self.sample_interval_ms;
                                             frame = frame::Audio::empty();
                                         }
                                     }
