@@ -381,7 +381,6 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
 
                         if stsd_box.data.len() >= avcc_data_end {
                             let avcc_data = stsd_box.data[avcc_data_start..avcc_data_end].to_vec();
-                            println!("Found avcC box. Content: {:?}", avcc_data);
                             stsd_box.avcc = Some(avcc_data);
                         } else {
                             println!("Not enough data for avcC box content. Expected end: {}, Actual len: {}", avcc_data_end, stsd_box.data.len());
@@ -396,8 +395,6 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
                         stsd_box.data.len()
                     );
                 }
-            } else {
-                println!("Codec is not avc1, got {}.", format);
             }
         } else {
             println!("Not enough data for sample description entry size and format.");
