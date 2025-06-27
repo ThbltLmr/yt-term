@@ -39,7 +39,7 @@ fn main() {
 
     let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
-    let frames_per_second = 30;
+    let frames_per_second = 25;
     let frame_interval_ms = 1000 / frames_per_second;
 
     let audio_bytes_per_second = 44100 * 2 * 4;

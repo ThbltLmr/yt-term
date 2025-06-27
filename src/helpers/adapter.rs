@@ -35,10 +35,6 @@ pub trait Adapter {
 
     fn is_producer_done(&self) -> bool;
 
-    fn get_interval_plus_five_percent(&self) -> Duration {
-        Duration::from_millis((1.05 * self.get_interval().as_millis() as f64) as u64)
-    }
-
     fn run(&self) -> Res<()> {
         let mut start_time = Instant::now();
         let mut started_playing = false;
@@ -54,13 +50,20 @@ pub trait Adapter {
                     started_playing = true;
                 }
 
-                let elapsed_timestamp = start_time.elapsed().as_millis();
-
-                while element.timestamp_in_ms > elapsed_timestamp as usize {
-                    thread::sleep(Duration::from_millis(
-                        element.timestamp_in_ms as u64 - elapsed_timestamp as u64,
-                    ));
+                while element.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
+                    thread::sleep(Duration::from_millis(1));
                 }
+
+                if element.timestamp_in_ms + 5 <= start_time.elapsed().as_millis() as usize {
+                    continue;
+                }
+
+                assert!(
+                    element
+                        .timestamp_in_ms
+                        .abs_diff(start_time.elapsed().as_millis() as usize)
+                        < 5
+                );
 
                 self.process_element(element)?;
             }
