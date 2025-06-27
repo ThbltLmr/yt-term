@@ -1,6 +1,8 @@
 use std::{
     sync::{mpsc::Receiver, Arc, Mutex},
-    time::Duration,
+    thread,
+    time::{Duration, Instant},
+    usize,
 };
 
 use super::{
@@ -38,29 +40,29 @@ pub trait Adapter {
     }
 
     fn run(&self) -> Res<()> {
-        let mut last_element_processing_time = std::time::Instant::now();
-        let mut total_elements_processed = 0;
+        let mut start_time = Instant::now();
+        let mut started_playing = false;
+
         loop {
             if self.is_buffer_empty() {
                 if self.is_producer_done() {
                     return Ok(());
                 }
-            } else if last_element_processing_time.elapsed() >= self.get_interval() {
-                if let Some(element) = self.get_buffer_element() {
-                    if total_elements_processed > 0
-                        && last_element_processing_time.elapsed()
-                            > self.get_interval_plus_five_percent()
-                    {
-                        last_element_processing_time += self.get_interval();
-                        total_elements_processed += 1;
-                        continue;
-                    }
-
-                    last_element_processing_time = std::time::Instant::now();
-                    total_elements_processed += 1;
-
-                    self.process_element(element)?;
+            } else if let Some(element) = self.get_buffer_element() {
+                if !started_playing {
+                    start_time = Instant::now();
+                    started_playing = true;
                 }
+
+                let elapsed_timestamp = start_time.elapsed().as_millis();
+
+                while element.timestamp_in_ms > elapsed_timestamp as usize {
+                    thread::sleep(Duration::from_millis(
+                        element.timestamp_in_ms as u64 - elapsed_timestamp as u64,
+                    ));
+                }
+
+                self.process_element(element)?;
             }
         }
     }
