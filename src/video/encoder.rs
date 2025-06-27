@@ -1,5 +1,5 @@
 use crate::helpers::structs::ContentQueue;
-use crate::helpers::types::{Bytes, Res};
+use crate::helpers::types::{BytesWithTimestamp, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
 use std::{
@@ -50,9 +50,13 @@ impl Encoder {
     }
 
     // Convert a frame to the Kitty Graphics Protocol format
-    fn encode_frame(&self, encoded_control_data: Vec<u8>, frame: Bytes) -> Bytes {
+    fn encode_frame(
+        &self,
+        encoded_control_data: Vec<u8>,
+        frame: BytesWithTimestamp,
+    ) -> BytesWithTimestamp {
         // Base64 encode the frame data
-        let encoded_payload = self.encode_rgb(frame);
+        let encoded_payload = self.encode_rgb(frame.data);
         let prefix = b"\x1b_G";
         let suffix = b"\x1b\\";
         let delimiter = b";";
@@ -64,7 +68,10 @@ impl Encoder {
         buffer.extend_from_slice(&encoded_payload);
         buffer.extend_from_slice(suffix);
 
-        buffer
+        BytesWithTimestamp {
+            data: buffer,
+            timestamp_in_ms: frame.timestamp_in_ms,
+        }
     }
 
     pub fn encode(&mut self) -> Res<()> {
@@ -110,6 +117,7 @@ impl Encoder {
         let encoded = general_purpose::STANDARD.encode(&rgb);
         encoded.as_bytes().to_vec()
     }
+
     fn get_terminal_size() -> std::io::Result<(u16, u16)> {
         let mut winsize: libc::winsize = unsafe { mem::zeroed() };
 
@@ -200,7 +208,11 @@ mod tests {
         )
         .unwrap();
 
-        let test_frame = vec![0; 640 * 480 * 3];
+        let test_frame = BytesWithTimestamp {
+            data: vec![0; 640 * 480 * 3],
+            timestamp_in_ms: 12,
+        };
+
         rgb_buffer.lock().unwrap().push_el(test_frame);
 
         thread::spawn(move || {
