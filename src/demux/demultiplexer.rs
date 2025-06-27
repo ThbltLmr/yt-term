@@ -280,6 +280,9 @@ impl Demultiplexer {
                                         let mut frame = frame::Audio::empty();
                                         while self.audio_decoder.receive_frame(&mut frame).is_ok() {
                                             let data = frame.data(0);
+
+                                            assert_eq!(data.len(), 8192);
+
                                             self.audio_samples_queue
                                                 .lock()
                                                 .unwrap()
