@@ -123,7 +123,6 @@ impl Demultiplexer {
         let mut moov_box = None;
         let mut sample_data = None;
 
-        let mut parsed_bytes = 0;
         let mut mdat_reached = false;
 
         let mut converter = self
@@ -165,8 +164,6 @@ impl Demultiplexer {
 
                             accumulated_data.drain(..8);
 
-                            parsed_bytes += 8;
-
                             match box_title.to_string().as_str() {
                                 "ftyp" => {
                                     ftyp_box = Some(FTYPBox {
@@ -177,7 +174,6 @@ impl Demultiplexer {
                                     });
 
                                     assert_eq!(box_size, ftyp_box.as_ref().unwrap().size);
-                                    parsed_bytes += box_size - 8;
                                 }
                                 "moov" => {
                                     match parse_moov(
@@ -193,8 +189,6 @@ impl Demultiplexer {
                                     }
 
                                     assert_eq!(box_size, moov_box.as_ref().unwrap().size);
-
-                                    parsed_bytes += box_size - 8;
 
                                     for trak in &moov_box.as_ref().unwrap().traks {
                                         if let Some(ref avcc_data) = trak.media.minf.stbl.stsd.avcc
@@ -215,8 +209,6 @@ impl Demultiplexer {
                                     if sample_data.clone().is_none() {
                                         println!("We are f'ed in the B by moov");
                                     }
-
-                                    println!("Bytes parsed for moov and ftyp: {}", parsed_bytes);
 
                                     mdat_reached = true;
 
