@@ -39,13 +39,22 @@ fn main() {
 
     let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
+    let frames_per_second = 30;
+    let frame_interval_ms = 1000 / frames_per_second;
+
+    let audio_bytes_per_second = 44100 * 2 * 4;
+    let audio_sample_size = 8192;
+
+    let samples_per_second = audio_bytes_per_second / audio_sample_size;
+    let sample_interval_ms = 1000 / samples_per_second;
+
     let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
 
-    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-    let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(43)));
+    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
+    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
+    let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
 
     let mut demux = Demultiplexer::new(
         raw_video_buffer.clone(),
@@ -59,10 +68,8 @@ fn main() {
     });
 
     let (video_encoding_done_tx, video_encoding_done_rx) = channel();
-
     let (audio_queueing_done_tx, audio_queueing_done_rx) = channel();
     let (video_queueing_done_tx, video_queueing_done_rx) = channel();
-
     let (playing_done_tx, playing_done_rx) = channel();
 
     let mut encoder = video::encoder::Encoder::new(
@@ -79,11 +86,11 @@ fn main() {
         encoder.encode().expect("Failed to start encoding");
     });
 
-    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(43)));
-    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
+    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
 
     let audio_adapter = audio::adapter::AudioAdapter::new(
-        Duration::from_millis(24),
+        Duration::from_millis(sample_interval_ms as u64),
         ready_audio_buffer.clone(),
         audio_queueing_done_rx,
     )
@@ -94,7 +101,7 @@ fn main() {
     });
 
     let video_adapter = video::adapter::TerminalAdapter::new(
-        Duration::from_millis(33),
+        Duration::from_millis(frame_interval_ms as u64),
         ready_video_buffer.clone(),
         video_queueing_done_rx,
     )
