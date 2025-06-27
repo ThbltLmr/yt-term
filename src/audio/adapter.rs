@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use crate::helpers::adapter::Adapter;
 use crate::helpers::structs::ContentQueue;
-use crate::helpers::types::{Bytes, Res};
+use crate::helpers::types::{BytesWithTimestamp, Res};
 use crate::{Arc, Mutex};
 
 pub struct AudioAdapter {
@@ -56,8 +56,9 @@ impl Adapter for AudioAdapter {
         self.interval
     }
 
-    fn process_element(&self, sample: Bytes) -> Res<()> {
-        self.simple.write(&self.planar_to_interleaved(&sample))?;
+    fn process_element(&self, sample: BytesWithTimestamp) -> Res<()> {
+        self.simple
+            .write(&self.planar_to_interleaved(&sample.data))?;
         Ok(())
     }
 

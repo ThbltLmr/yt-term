@@ -9,7 +9,7 @@ use crate::demux::moov::{parse_moov, FTYPBox};
 
 use crate::demux::sample_data::extract_sample_data;
 use crate::helpers::structs::ContentQueue;
-use crate::helpers::types::Bytes;
+use crate::helpers::types::BytesWithTimestamp;
 
 pub struct Demultiplexer {
     pub url: String,
@@ -235,7 +235,7 @@ impl Demultiplexer {
                             let current_sample_data =
                                 sample_data.as_mut().unwrap().pop_front().unwrap();
 
-                            let sample: Bytes = accumulated_data
+                            let sample: BytesWithTimestamp = accumulated_data
                                 .drain(..current_sample_data.size as usize)
                                 .collect();
 

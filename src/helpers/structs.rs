@@ -2,10 +2,10 @@ use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use super::types::{Bytes, Res};
+use super::types::{BytesWithTimestamp, Res};
 
 pub struct ContentQueue {
-    elements: VecDeque<Bytes>,
+    elements: VecDeque<BytesWithTimestamp>,
     el_per_second: usize,
 }
 
@@ -27,17 +27,17 @@ impl ContentQueue {
         queue.push_elements(elements);
     }
 
-    pub fn push_el(&mut self, element: Bytes) {
+    pub fn push_el(&mut self, element: BytesWithTimestamp) {
         self.elements.push_back(element);
     }
 
-    fn push_elements(&mut self, elements: Vec<Bytes>) {
+    fn push_elements(&mut self, elements: Vec<BytesWithTimestamp>) {
         for element in elements {
             self.elements.push_back(element);
         }
     }
 
-    pub fn pop_one_second(&mut self) -> Vec<Bytes> {
+    pub fn pop_one_second(&mut self) -> Vec<BytesWithTimestamp> {
         let mut elements = Vec::new();
         for _ in 0..self.el_per_second {
             if let Some(el) = self.elements.pop_front() {
@@ -49,7 +49,7 @@ impl ContentQueue {
         elements
     }
 
-    pub fn get_el(&mut self) -> Option<Bytes> {
+    pub fn get_el(&mut self) -> Option<BytesWithTimestamp> {
         self.elements.pop_front()
     }
 
@@ -62,7 +62,7 @@ impl ContentQueue {
     }
 
     pub fn bytes_len(&self) -> usize {
-        self.elements.iter().map(|el| el.len()).sum()
+        self.elements.iter().map(|el| el.data.len()).sum()
     }
 }
 
@@ -105,8 +105,15 @@ mod tests {
         let mut buffer = ContentQueue::new(1);
         assert_eq!(buffer.len(), 0);
 
-        let frame1 = vec![1, 2, 3];
-        let frame2 = vec![4, 5, 6];
+        let frame1 = BytesWithTimestamp {
+            data: vec![1, 2, 3],
+            timestamp_in_ms: 1000,
+        };
+
+        let frame2 = BytesWithTimestamp {
+            data: vec![4, 5, 6],
+            timestamp_in_ms: 2000,
+        };
 
         buffer.push_el(frame1);
         buffer.push_el(frame2);
@@ -114,7 +121,7 @@ mod tests {
         assert_eq!(buffer.len(), 2);
 
         let retrieved_frame = buffer.get_el().unwrap();
-        assert_eq!(retrieved_frame, vec![1, 2, 3]);
+        assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
 
         assert_eq!(buffer.len(), 1);
     }
@@ -122,14 +129,23 @@ mod tests {
     #[test]
     fn ring_buffer_pop_one_second() {
         let mut buffer = ContentQueue::new(2);
-        buffer.push_el(vec![1, 2, 3]);
-        buffer.push_el(vec![4, 5, 6]);
-        buffer.push_el(vec![7, 8, 9]);
+        buffer.push_el(BytesWithTimestamp {
+            data: vec![1, 2, 3],
+            timestamp_in_ms: 1000,
+        });
+        buffer.push_el(BytesWithTimestamp {
+            data: vec![4, 5, 6],
+            timestamp_in_ms: 1000,
+        });
+        buffer.push_el(BytesWithTimestamp {
+            data: vec![7, 8, 9],
+            timestamp_in_ms: 1000,
+        });
 
         let popped = buffer.pop_one_second();
         assert_eq!(popped.len(), 2);
-        assert_eq!(popped[0], vec![1, 2, 3]);
-        assert_eq!(popped[1], vec![4, 5, 6]);
+        assert_eq!(popped[0].data, vec![1, 2, 3]);
+        assert_eq!(popped[1].data, vec![4, 5, 6]);
         assert_eq!(buffer.len(), 1);
     }
 
@@ -138,10 +154,18 @@ mod tests {
         let mut buffer = ContentQueue::new(2);
         assert!(!buffer.has_one_second_ready());
 
-        buffer.push_el(vec![1, 2, 3]);
+        buffer.push_el(BytesWithTimestamp {
+            data: vec![1, 2, 3],
+            timestamp_in_ms: 1000,
+        });
+
         assert!(!buffer.has_one_second_ready());
 
-        buffer.push_el(vec![4, 5, 6]);
+        buffer.push_el(BytesWithTimestamp {
+            data: vec![4, 5, 6],
+            timestamp_in_ms: 1000,
+        });
+
         assert!(buffer.has_one_second_ready());
     }
 

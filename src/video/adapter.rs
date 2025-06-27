@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::helpers::adapter::Adapter;
 use crate::helpers::structs::ContentQueue;
-use crate::helpers::types::{Bytes, Res};
+use crate::helpers::types::{BytesWithTimestamp, Res};
 use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
@@ -38,14 +38,14 @@ impl Adapter for TerminalAdapter {
         self.producer_done_rx.try_recv().is_ok()
     }
 
-    fn process_element(&self, frame: Bytes) -> Res<()> {
+    fn process_element(&self, frame: BytesWithTimestamp) -> Res<()> {
         let mut stdout = io::stdout();
 
         let reset_cursor = b"\x1B[H";
         let mut buffer = vec![];
 
         buffer.extend_from_slice(reset_cursor);
-        buffer.extend_from_slice(&frame);
+        buffer.extend_from_slice(&frame.data);
 
         stdout.write_all(&buffer)?;
         stdout.flush()?;

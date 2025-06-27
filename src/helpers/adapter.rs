@@ -5,7 +5,7 @@ use std::{
 
 use super::{
     structs::ContentQueue,
-    types::{Bytes, Res},
+    types::{BytesWithTimestamp, Res},
 };
 
 pub trait Adapter {
@@ -17,7 +17,7 @@ pub trait Adapter {
     where
         Self: Sized;
 
-    fn process_element(&self, element: Bytes) -> Res<()>;
+    fn process_element(&self, element: BytesWithTimestamp) -> Res<()>;
 
     fn get_buffer(&self) -> Arc<Mutex<ContentQueue>>;
 
@@ -25,7 +25,7 @@ pub trait Adapter {
         self.get_buffer().lock().unwrap().is_empty()
     }
 
-    fn get_buffer_element(&self) -> Option<Bytes> {
+    fn get_buffer_element(&self) -> Option<BytesWithTimestamp> {
         self.get_buffer().lock().unwrap().get_el()
     }
 
