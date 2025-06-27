@@ -24,7 +24,6 @@ mod demux {
 use std::{
     sync::{mpsc::channel, Arc, Mutex},
     thread,
-    time::Duration,
 };
 
 use demux::demultiplexer::Demultiplexer;
@@ -39,7 +38,7 @@ fn main() {
 
     let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
 
-    let frames_per_second = 25;
+    let frames_per_second = 30;
     let frame_interval_ms = 1000 / frames_per_second;
 
     let audio_bytes_per_second = 44100 * 2 * 4;
@@ -91,23 +90,17 @@ fn main() {
     let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
     let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
 
-    let audio_adapter = audio::adapter::AudioAdapter::new(
-        Duration::from_millis(sample_interval_ms as u64),
-        ready_audio_buffer.clone(),
-        audio_queueing_done_rx,
-    )
-    .expect("Failed to create audio adapter");
+    let audio_adapter =
+        audio::adapter::AudioAdapter::new(ready_audio_buffer.clone(), audio_queueing_done_rx)
+            .expect("Failed to create audio adapter");
 
     thread::spawn(move || {
         audio_adapter.run().expect("Failed to start audio playback");
     });
 
-    let video_adapter = video::adapter::TerminalAdapter::new(
-        Duration::from_millis(frame_interval_ms as u64),
-        ready_video_buffer.clone(),
-        video_queueing_done_rx,
-    )
-    .expect("Failed to create video adapter");
+    let video_adapter =
+        video::adapter::TerminalAdapter::new(ready_video_buffer.clone(), video_queueing_done_rx)
+            .expect("Failed to create video adapter");
 
     thread::spawn(move || {
         video_adapter.run().expect("Failed to start video display");

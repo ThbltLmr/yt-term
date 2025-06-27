@@ -1,6 +1,5 @@
 use std::io::{self, Write};
 use std::sync::mpsc::Receiver;
-use std::time::Duration;
 
 use crate::helpers::adapter::Adapter;
 use crate::helpers::structs::ContentQueue;
@@ -8,19 +7,13 @@ use crate::helpers::types::{BytesWithTimestamp, Res};
 use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
-    interval: Duration,
     buffer: Arc<Mutex<ContentQueue>>,
     producer_done_rx: Receiver<()>,
 }
 
 impl Adapter for TerminalAdapter {
-    fn new(
-        interval: Duration,
-        buffer: Arc<Mutex<ContentQueue>>,
-        producer_done_rx: Receiver<()>,
-    ) -> Res<Self> {
+    fn new(buffer: Arc<Mutex<ContentQueue>>, producer_done_rx: Receiver<()>) -> Res<Self> {
         Ok(TerminalAdapter {
-            interval,
             buffer,
             producer_done_rx,
         })
@@ -28,10 +21,6 @@ impl Adapter for TerminalAdapter {
 
     fn get_buffer(&self) -> Arc<Mutex<ContentQueue>> {
         self.buffer.clone()
-    }
-
-    fn get_interval(&self) -> Duration {
-        self.interval
     }
 
     fn is_producer_done(&self) -> bool {
@@ -62,8 +51,7 @@ mod tests {
     fn video_adapter_creation() {
         let (_tx, rx) = mpsc::channel();
         let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-        let display_manager =
-            TerminalAdapter::new(Duration::from_millis(30), encoded_buffer.clone(), rx);
+        let display_manager = TerminalAdapter::new(encoded_buffer.clone(), rx);
 
         assert!(display_manager.is_ok());
     }

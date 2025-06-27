@@ -11,11 +11,7 @@ use super::{
 };
 
 pub trait Adapter {
-    fn new(
-        interval: Duration,
-        buffer: Arc<Mutex<ContentQueue>>,
-        producer_done_rx: Receiver<()>,
-    ) -> Res<Self>
+    fn new(buffer: Arc<Mutex<ContentQueue>>, producer_done_rx: Receiver<()>) -> Res<Self>
     where
         Self: Sized;
 
@@ -30,8 +26,6 @@ pub trait Adapter {
     fn get_buffer_element(&self) -> Option<BytesWithTimestamp> {
         self.get_buffer().lock().unwrap().get_el()
     }
-
-    fn get_interval(&self) -> Duration;
 
     fn is_producer_done(&self) -> bool;
 

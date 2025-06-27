@@ -3,7 +3,6 @@ use pulse::stream::Direction;
 use simple_pulse::Simple;
 
 use std::sync::mpsc::Receiver;
-use std::time::Duration;
 
 use crate::helpers::adapter::Adapter;
 use crate::helpers::structs::ContentQueue;
@@ -12,17 +11,12 @@ use crate::{Arc, Mutex};
 
 pub struct AudioAdapter {
     simple: Simple,
-    interval: Duration,
     buffer: Arc<Mutex<ContentQueue>>,
     producer_done_rx: Receiver<()>,
 }
 
 impl Adapter for AudioAdapter {
-    fn new(
-        interval: Duration,
-        buffer: Arc<Mutex<ContentQueue>>,
-        producer_done_rx: Receiver<()>,
-    ) -> Res<Self> {
+    fn new(buffer: Arc<Mutex<ContentQueue>>, producer_done_rx: Receiver<()>) -> Res<Self> {
         let spec = Spec {
             format: Format::F32le,
             channels: 2,
@@ -41,7 +35,6 @@ impl Adapter for AudioAdapter {
         )?;
 
         Ok(AudioAdapter {
-            interval,
             buffer,
             producer_done_rx,
             simple,
@@ -50,10 +43,6 @@ impl Adapter for AudioAdapter {
 
     fn get_buffer(&self) -> Arc<Mutex<ContentQueue>> {
         self.buffer.clone()
-    }
-
-    fn get_interval(&self) -> Duration {
-        self.interval
     }
 
     fn process_element(&self, sample: BytesWithTimestamp) -> Res<()> {
