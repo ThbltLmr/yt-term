@@ -169,6 +169,7 @@ impl DrainToBox for Vec<u8> {
     fn drain_box_data(&mut self, box_size: u32) -> Vec<u8> {
         self.drain(..(box_size - 8) as usize).collect()
     }
+
     fn get_next_box_size_and_title(&mut self) -> (u32, String) {
         let size_bytes: [u8; 4] = self.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
         let box_size = u32::from_be_bytes(size_bytes);
