@@ -1,30 +1,27 @@
 use std::error::Error;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Streams {
     Audio,
     Video,
 }
 
-#[derive(Clone)]
-pub struct MP4Box {
-    pub size: u32,
-    pub title: String,
-    pub data: Vec<u8>,
-}
-
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct FTYPBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct MVHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct STSDBox {
     pub size: u32,
@@ -32,42 +29,49 @@ pub struct STSDBox {
     pub avcc: Option<Vec<u8>>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct STTSBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct CTTSBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct STSCBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct STSZBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct STCOBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct STSSBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct STBLBbox {
     pub size: u32,
@@ -80,24 +84,28 @@ pub struct STBLBbox {
     pub stss: Option<STSSBox>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct DINFBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct VMHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct SMHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct MINFBox {
     pub size: u32,
@@ -106,18 +114,21 @@ pub struct MINFBox {
     pub stbl: STBLBbox,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct HDLRBox {
     pub size: u32,
     data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct MDHDBox {
     pub size: u32,
     data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct MDIABox {
     pub size: u32,
@@ -126,12 +137,14 @@ pub struct MDIABox {
     pub minf: MINFBox,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct TKHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct TRAKBox {
     pub size: u32,
@@ -139,6 +152,7 @@ pub struct TRAKBox {
     pub media: MDIABox,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct MOOVBox {
     pub size: u32,

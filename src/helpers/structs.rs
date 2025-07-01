@@ -53,10 +53,6 @@ impl ContentQueue {
         self.elements.pop_front()
     }
 
-    pub fn len(&self) -> usize {
-        self.elements.len()
-    }
-
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }
@@ -103,7 +99,6 @@ mod tests {
     #[test]
     fn ring_buffer_push_and_get() {
         let mut buffer = ContentQueue::new(1);
-        assert_eq!(buffer.len(), 0);
 
         let frame1 = BytesWithTimestamp {
             data: vec![1, 2, 3],
@@ -118,12 +113,8 @@ mod tests {
         buffer.push_el(frame1);
         buffer.push_el(frame2);
 
-        assert_eq!(buffer.len(), 2);
-
         let retrieved_frame = buffer.get_el().unwrap();
         assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
-
-        assert_eq!(buffer.len(), 1);
     }
 
     #[test]
@@ -143,10 +134,8 @@ mod tests {
         });
 
         let popped = buffer.pop_one_second();
-        assert_eq!(popped.len(), 2);
         assert_eq!(popped[0].data, vec![1, 2, 3]);
         assert_eq!(popped[1].data, vec![4, 5, 6]);
-        assert_eq!(buffer.len(), 1);
     }
 
     #[test]
