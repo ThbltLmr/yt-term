@@ -17,8 +17,8 @@ mod audio {
 
 mod demux {
     pub mod demultiplexer;
-    mod moov;
-    mod sample_data;
+    mod get_moov_box;
+    mod get_sample_map;
 }
 
 use std::{

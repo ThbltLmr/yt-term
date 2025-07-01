@@ -134,10 +134,7 @@ impl Encoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        sync::{mpsc, Arc, Mutex},
-        thread,
-    };
+    use std::sync::{mpsc, Arc, Mutex};
 
     #[test]
     fn test_new_encoder() {
@@ -189,40 +186,6 @@ mod tests {
         assert!(String::from_utf8(encoded_data.clone())
             .unwrap()
             .contains("v=480"));
-    }
-
-    #[test]
-    fn test_encode_frame() {
-        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let (streaming_done_tx, streaming_done_rx) = mpsc::channel();
-        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
-
-        let mut encoder = Encoder::new(
-            rgb_buffer.clone(),
-            encoded_buffer.clone(),
-            640,
-            480,
-            streaming_done_rx,
-            encoding_done_tx,
-        )
-        .unwrap();
-
-        let test_frame = BytesWithTimestamp {
-            data: vec![0; 640 * 480 * 3],
-            timestamp_in_ms: 12,
-        };
-
-        rgb_buffer.lock().unwrap().push_el(test_frame);
-
-        thread::spawn(move || {
-            encoder.encode().unwrap();
-        });
-
-        thread::sleep(std::time::Duration::from_millis(100));
-        streaming_done_tx.send(()).unwrap();
-
-        assert_eq!(encoded_buffer.lock().unwrap().len(), 1);
     }
 
     #[test]

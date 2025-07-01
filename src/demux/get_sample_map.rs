@@ -22,7 +22,7 @@ struct ChunkToSample {
     pub sample_count: u32,
 }
 
-pub fn extract_sample_data(moov_box: MOOVBox) -> Result<SampleMap, Box<dyn Error>> {
+pub fn get_sample_map(moov_box: MOOVBox) -> Result<SampleMap, Box<dyn Error>> {
     let mut chunk_data: VecDeque<ChunkData> = VecDeque::new();
     for trak in moov_box.traks {
         let chunk_offsets = parse_stco(&trak.media.minf.stbl.stco);

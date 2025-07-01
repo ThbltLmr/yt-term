@@ -5,13 +5,13 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::usize;
 
-use crate::demux::moov::{get_moov_box, FTYPBox, MOOVBox};
+use crate::demux::get_moov_box::{get_moov_box, FTYPBox, MOOVBox};
 
-use crate::demux::sample_data::extract_sample_data;
+use crate::demux::get_sample_map::get_sample_map;
 use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::BytesWithTimestamp;
 
-use super::sample_data::SampleMap;
+use super::get_sample_map::SampleMap;
 
 pub struct Demultiplexer {
     pub url: String,
@@ -124,7 +124,7 @@ impl Demultiplexer {
         let mut accumulated_data: Vec<u8> = vec![];
 
         let mut ftyp_box = None;
-        let mut sample_data: Option<SampleMap> = None;
+        let mut sample_map: Option<SampleMap> = None;
 
         let mut mdat_reached = false;
 
@@ -207,14 +207,13 @@ impl Demultiplexer {
                                         }
                                     }
 
-                                    sample_data =
-                                        Some(extract_sample_data(moov_box.unwrap()).unwrap());
+                                    sample_map = Some(get_sample_map(moov_box.unwrap()).unwrap());
                                 }
                                 "mdat" => {
                                     if ftyp_box.is_none() {
                                         println!("We are f'ed in the B by ftyp");
                                     }
-                                    if sample_data.clone().is_none() {
+                                    if sample_map.clone().is_none() {
                                         println!("We are f'ed in the B by moov");
                                     }
 
@@ -232,13 +231,13 @@ impl Demultiplexer {
                         }
                     }
 
-                    if sample_data.is_some() {
-                        while !sample_data.as_ref().unwrap().is_empty()
+                    if sample_map.is_some() {
+                        while !sample_map.as_ref().unwrap().is_empty()
                             && accumulated_data.len()
-                                >= sample_data.as_ref().unwrap().front().unwrap().size as usize
+                                >= sample_map.as_ref().unwrap().front().unwrap().size as usize
                         {
                             let current_sample_data =
-                                sample_data.as_mut().unwrap().pop_front().unwrap();
+                                sample_map.as_mut().unwrap().pop_front().unwrap();
 
                             let sample: Vec<u8> = accumulated_data
                                 .drain(..current_sample_data.size as usize)
