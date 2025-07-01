@@ -5,7 +5,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::usize;
 
-use crate::demux::moov::{parse_moov, FTYPBox, MOOVBox};
+use crate::demux::moov::{get_moov_box, FTYPBox, MOOVBox};
 
 use crate::demux::sample_data::extract_sample_data;
 use crate::helpers::structs::ContentQueue;
@@ -184,7 +184,7 @@ impl Demultiplexer {
                                 "moov" => {
                                     let moov_box: Option<MOOVBox>;
 
-                                    match parse_moov(
+                                    match get_moov_box(
                                         box_size,
                                         accumulated_data.drain(..(box_size - 8) as usize).collect(),
                                     ) {

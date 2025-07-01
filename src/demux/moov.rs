@@ -160,7 +160,17 @@ pub struct MOOVBox {
     pub traks: Vec<TRAKBox>,
 }
 
-pub fn parse_moov(size: u32, mut data: Vec<u8>) -> Result<MOOVBox, Box<dyn Error>> {
+pub trait DrainToBox {
+    fn drain_box_data(&mut self, box_size: u32) -> Vec<u8>;
+}
+
+impl DrainToBox for Vec<u8> {
+    fn drain_box_data(&mut self, box_size: u32) -> Vec<u8> {
+        self.drain(..(box_size - 8) as usize).collect()
+    }
+}
+
+pub fn get_moov_box(size: u32, mut data: Vec<u8>) -> Result<MOOVBox, Box<dyn Error>> {
     let mut mvhd_box = None;
     let mut traks: Vec<TRAKBox> = vec![];
 
@@ -175,12 +185,11 @@ pub fn parse_moov(size: u32, mut data: Vec<u8>) -> Result<MOOVBox, Box<dyn Error
             "mvhd" => {
                 mvhd_box = Some(MVHDBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "trak" => {
-                let trak_box =
-                    parse_trak(box_size, data.drain(..(box_size - 8) as usize).collect())?;
+                let trak_box = get_trak_box(box_size, data.drain_box_data(box_size))?;
 
                 traks.push(trak_box);
             }
@@ -197,7 +206,7 @@ pub fn parse_moov(size: u32, mut data: Vec<u8>) -> Result<MOOVBox, Box<dyn Error
     })
 }
 
-pub fn parse_trak(size: u32, mut data: Vec<u8>) -> Result<TRAKBox, Box<dyn Error>> {
+pub fn get_trak_box(size: u32, mut data: Vec<u8>) -> Result<TRAKBox, Box<dyn Error>> {
     let mut tkhd_box = None;
     let mut mdia_box = None;
 
@@ -212,14 +221,11 @@ pub fn parse_trak(size: u32, mut data: Vec<u8>) -> Result<TRAKBox, Box<dyn Error
             "tkhd" => {
                 tkhd_box = Some(TKHDBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "mdia" => {
-                mdia_box = Some(parse_mdia(
-                    box_size,
-                    data.drain(..(box_size - 8) as usize).collect(),
-                )?);
+                mdia_box = Some(get_mdia_box(box_size, data.drain_box_data(box_size))?);
             }
             _ => {
                 data.drain(..(box_size - 8) as usize);
@@ -234,7 +240,7 @@ pub fn parse_trak(size: u32, mut data: Vec<u8>) -> Result<TRAKBox, Box<dyn Error
     })
 }
 
-pub fn parse_mdia(size: u32, mut data: Vec<u8>) -> Result<MDIABox, Box<dyn Error>> {
+pub fn get_mdia_box(size: u32, mut data: Vec<u8>) -> Result<MDIABox, Box<dyn Error>> {
     let mut mdhd_box = None;
     let mut hdlr_box = None;
     let mut minf_box = None;
@@ -250,20 +256,17 @@ pub fn parse_mdia(size: u32, mut data: Vec<u8>) -> Result<MDIABox, Box<dyn Error
             "mdhd" => {
                 mdhd_box = Some(MDHDBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "hdlr" => {
                 hdlr_box = Some(HDLRBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "minf" => {
-                minf_box = Some(parse_minf(
-                    box_size,
-                    data.drain(..(box_size - 8) as usize).collect(),
-                )?);
+                minf_box = Some(get_minf_box(box_size, data.drain_box_data(box_size))?);
             }
             _ => {
                 return Err(format!("Unknown mdia sub-box, got {}", title).into());
@@ -279,7 +282,7 @@ pub fn parse_mdia(size: u32, mut data: Vec<u8>) -> Result<MDIABox, Box<dyn Error
     })
 }
 
-pub fn parse_minf(size: u32, mut data: Vec<u8>) -> Result<MINFBox, Box<dyn Error>> {
+pub fn get_minf_box(size: u32, mut data: Vec<u8>) -> Result<MINFBox, Box<dyn Error>> {
     let mut dinf_box = None;
     let mut stbl_box = None;
     let mut stream_header = None;
@@ -295,26 +298,23 @@ pub fn parse_minf(size: u32, mut data: Vec<u8>) -> Result<MINFBox, Box<dyn Error
             "dinf" => {
                 dinf_box = Some(DINFBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "stbl" => {
-                stbl_box = Some(parse_stbl(
-                    box_size,
-                    data.drain(..(box_size - 8) as usize).collect(),
-                )?);
+                stbl_box = Some(get_stbl_box(box_size, data.drain_box_data(box_size))?);
             }
             "vmhd" => {
                 let _vmhd_box = VMHDBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 };
                 stream_header = Some(Streams::Video);
             }
             "smhd" => {
                 let _smhd_box = SMHDBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 };
                 stream_header = Some(Streams::Audio);
             }
@@ -332,7 +332,7 @@ pub fn parse_minf(size: u32, mut data: Vec<u8>) -> Result<MINFBox, Box<dyn Error
     })
 }
 
-pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Error>> {
+pub fn get_stbl_box(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Error>> {
     let stsd_size_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
     let stsd_size = u32::from_be_bytes(stsd_size_bytes);
 
@@ -345,7 +345,7 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
 
     let mut stsd_box = STSDBox {
         size: stsd_size,
-        data: data.drain(..(stsd_size - 8) as usize).collect(),
+        data: data.drain_box_data(stsd_size),
         avcc: None,
     };
 
@@ -435,37 +435,37 @@ pub fn parse_stbl(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Erro
             "stts" => {
                 stts_box = Some(STTSBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "ctts" => {
                 ctts_box = Some(CTTSBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "stsc" => {
                 stsc_box = Some(STSCBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "stsz" => {
                 stsz_box = Some(STSZBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "stco" => {
                 stco_box = Some(STCOBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             "stss" => {
                 stss_box = Some(STSSBox {
                     size: box_size,
-                    data: data.drain(..(box_size - 8) as usize).collect(),
+                    data: data.drain_box_data(box_size),
                 });
             }
             _ => return Err(format!("Unknown stbl sub-box, got {}", box_title).into()),
