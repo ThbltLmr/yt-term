@@ -2,9 +2,10 @@ use std::{collections::VecDeque, error::Error, usize};
 
 use super::moov::{MOOVBox, STCOBox, STSCBox, STSZBox, Streams};
 
+pub type SampleMap = VecDeque<SampleData>;
+
 #[derive(Clone, Debug)]
 pub struct SampleData {
-    pub offset: u32,
     pub size: u32,
     pub is_video: bool,
 }
@@ -13,7 +14,6 @@ pub struct SampleData {
 pub struct ChunkData {
     pub is_video: bool,
     pub offset: u32,
-    pub sample_count: u32,
     pub sample_sizes: Vec<u32>,
 }
 
@@ -22,7 +22,7 @@ struct ChunkToSample {
     pub sample_count: u32,
 }
 
-pub fn extract_sample_data(moov_box: MOOVBox) -> Result<VecDeque<SampleData>, Box<dyn Error>> {
+pub fn extract_sample_data(moov_box: MOOVBox) -> Result<SampleMap, Box<dyn Error>> {
     let mut chunk_data: VecDeque<ChunkData> = VecDeque::new();
     for trak in moov_box.traks {
         let chunk_offsets = parse_stco(&trak.media.minf.stbl.stco);
@@ -70,7 +70,6 @@ fn format_sample_data(chunk_data: VecDeque<ChunkData>) -> VecDeque<SampleData> {
                     let sample_data: SampleData = SampleData {
                         size: *size,
                         is_video: chunk.is_video,
-                        offset: chunk.offset + sample_offsets_sum,
                     };
 
                     sample_offsets_sum += *size;
@@ -160,7 +159,6 @@ fn parse_stsz(
             .map(|(offset, sample_count)| ChunkData {
                 is_video,
                 offset: offset.clone(),
-                sample_count: sample_count.clone(),
                 sample_sizes: vec![general_size; sample_count.clone() as usize],
             })
             .collect();
@@ -175,7 +173,6 @@ fn parse_stsz(
             let chunk_data = ChunkData {
                 is_video,
                 offset: offset.clone(),
-                sample_count: sample_count.clone(),
                 sample_sizes: sizes[current_index..(current_index + *sample_count as usize)]
                     .to_vec(),
             };

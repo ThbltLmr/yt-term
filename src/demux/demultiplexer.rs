@@ -5,11 +5,13 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::usize;
 
-use crate::demux::moov::{parse_moov, FTYPBox};
+use crate::demux::moov::{parse_moov, FTYPBox, MOOVBox};
 
 use crate::demux::sample_data::extract_sample_data;
 use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::BytesWithTimestamp;
+
+use super::sample_data::SampleMap;
 
 pub struct Demultiplexer {
     pub url: String,
@@ -122,8 +124,7 @@ impl Demultiplexer {
         let mut accumulated_data: Vec<u8> = vec![];
 
         let mut ftyp_box = None;
-        let mut moov_box = None;
-        let mut sample_data = None;
+        let mut sample_data: Option<SampleMap> = None;
 
         let mut mdat_reached = false;
 
@@ -181,6 +182,8 @@ impl Demultiplexer {
                                     assert_eq!(box_size, ftyp_box.as_ref().unwrap().size);
                                 }
                                 "moov" => {
+                                    let moov_box: Option<MOOVBox>;
+
                                     match parse_moov(
                                         box_size,
                                         accumulated_data.drain(..(box_size - 8) as usize).collect(),
