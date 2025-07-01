@@ -9,7 +9,6 @@ This is a hobby project, meant to be a proof of concept and to try out the Kitty
 ## Dependencies
 This program requires:
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) to extract data from video websites
-- [ffmpeg](https://www.ffmpeg.org) to pre-encode frames to RGB
 - a terminal that supports the Kitty graphics protocol, e.g. [Kitty](https://sw.kovidgoyal.net/kitty/), [Ghostty](https://ghostty.org/)
 
 ## Usage
@@ -36,6 +35,4 @@ You can run the program with the following command:
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-u`, `--url` | The URL of the video to play | https://www.youtube.com/watch?v=dQw4w9WgXcQ |
-| `-w`, `--width` | The width of the video in pixels | 640 |
-| `-h`, `--height` | The height of the video in pixels | 360 |
 
