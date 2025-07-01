@@ -34,6 +34,14 @@ impl Demultiplexer {
         frame_interval_ms: usize,
         sample_interval_ms: usize,
     ) -> Self {
+        /*
+         * This is a very hacky fix to initiate an AVContext.
+         * The simple-ffmpeg does not provide a safe way to instantiate a Context struct from its
+         * properties. It only provides a way to instantiate a context from an input file.
+         * Here, we use a minimal sample file (1 second video) downloaded from YouTube as an example of AVContext. We are
+         * assuming that all MP4 files from YouTube will have the same properties.
+         */
+        // TODO: Write unsafe block to create AVContext from moov data
         let input = ffmpeg::format::input("/home/Thibault/Downloads/sample.mp4").unwrap();
         let video_context = ffmpeg::codec::context::Context::from_parameters(
             input
@@ -70,6 +78,9 @@ impl Demultiplexer {
         }
     }
 
+    /*
+     * Helper function to get the bit at the specified index of a byte
+     */
     fn get_bit(&self, byte: u8, bit_index: u8) -> u8 {
         if bit_index >= 8 {
             panic!("Bit index out of bounds: {}", bit_index);
@@ -77,6 +88,11 @@ impl Demultiplexer {
 
         ((byte & (1 << bit_index)) != 0).try_into().unwrap()
     }
+
+    /*
+     * Converts from a NAL with its length at the beginning
+     * to a NAL with a start code at the beginning (as expected by decoder)
+     */
     fn convert_avcc_to_annexb(&self, data: &[u8]) -> Vec<u8> {
         let mut result = Vec::new();
         let mut offset = 0;
@@ -110,6 +126,12 @@ impl Demultiplexer {
     }
 
     pub fn demux(&mut self) {
+        /*
+         * This starts the yt-dlp program for a given url, looking for format 18
+         * Format 18 corresponds to a mp4 file with audio and video tracks
+         * Video is encoded in H264, at 640x360
+         * Audio is encoded in AAC-LC
+         */
         let mut yt_dlp_process = Command::new("yt-dlp")
             .args(["-o", "-", "--no-part", "-f", "18", &self.url])
             .stderr(Stdio::null())
@@ -128,6 +150,10 @@ impl Demultiplexer {
 
         let mut mdat_reached = false;
 
+        /*
+         * After decoding, the frames are in YUP format
+         * We need to convert to RGB to match the specification of the Kitty graphics protocol
+         */
         let mut converter = self
             .video_decoder
             .converter(ffmpeg_next::format::Pixel::RGB24)
