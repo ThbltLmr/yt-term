@@ -162,11 +162,21 @@ pub struct MOOVBox {
 
 pub trait DrainToBox {
     fn drain_box_data(&mut self, box_size: u32) -> Vec<u8>;
+    fn get_next_box_size_and_title(&mut self) -> (u32, String);
 }
 
 impl DrainToBox for Vec<u8> {
     fn drain_box_data(&mut self, box_size: u32) -> Vec<u8> {
         self.drain(..(box_size - 8) as usize).collect()
+    }
+    fn get_next_box_size_and_title(&mut self) -> (u32, String) {
+        let size_bytes: [u8; 4] = self.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
+        let box_size = u32::from_be_bytes(size_bytes);
+
+        let title_bytes: [u8; 4] = self.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
+        let title = String::from_utf8_lossy(&title_bytes).to_string();
+
+        (box_size, title)
     }
 }
 
@@ -175,13 +185,9 @@ pub fn get_moov_box(size: u32, mut data: Vec<u8>) -> Result<MOOVBox, Box<dyn Err
     let mut traks: Vec<TRAKBox> = vec![];
 
     while data.len() > 0 {
-        let size_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let box_size = u32::from_be_bytes(size_bytes);
+        let (box_size, title) = data.get_next_box_size_and_title();
 
-        let title_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let title = String::from_utf8_lossy(&title_bytes);
-
-        match title.to_string().as_str() {
+        match title.as_str() {
             "mvhd" => {
                 mvhd_box = Some(MVHDBox {
                     size: box_size,
@@ -211,13 +217,9 @@ pub fn get_trak_box(size: u32, mut data: Vec<u8>) -> Result<TRAKBox, Box<dyn Err
     let mut mdia_box = None;
 
     while data.len() > 0 {
-        let size_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let box_size = u32::from_be_bytes(size_bytes);
+        let (box_size, title) = data.get_next_box_size_and_title();
 
-        let title_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let title = String::from_utf8_lossy(&title_bytes);
-
-        match title.to_string().as_str() {
+        match title.as_str() {
             "tkhd" => {
                 tkhd_box = Some(TKHDBox {
                     size: box_size,
@@ -246,13 +248,9 @@ pub fn get_mdia_box(size: u32, mut data: Vec<u8>) -> Result<MDIABox, Box<dyn Err
     let mut minf_box = None;
 
     while data.len() > 0 {
-        let size_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let box_size = u32::from_be_bytes(size_bytes);
+        let (box_size, title) = data.get_next_box_size_and_title();
 
-        let title_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let title = String::from_utf8_lossy(&title_bytes);
-
-        match title.to_string().as_str() {
+        match title.as_str() {
             "mdhd" => {
                 mdhd_box = Some(MDHDBox {
                     size: box_size,
@@ -288,13 +286,9 @@ pub fn get_minf_box(size: u32, mut data: Vec<u8>) -> Result<MINFBox, Box<dyn Err
     let mut stream_header = None;
 
     while data.len() > 0 {
-        let size_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let box_size = u32::from_be_bytes(size_bytes);
+        let (box_size, title) = data.get_next_box_size_and_title();
 
-        let title_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let title = String::from_utf8_lossy(&title_bytes);
-
-        match title.to_string().as_str() {
+        match title.as_str() {
             "dinf" => {
                 dinf_box = Some(DINFBox {
                     size: box_size,
@@ -333,19 +327,15 @@ pub fn get_minf_box(size: u32, mut data: Vec<u8>) -> Result<MINFBox, Box<dyn Err
 }
 
 pub fn get_stbl_box(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Error>> {
-    let stsd_size_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-    let stsd_size = u32::from_be_bytes(stsd_size_bytes);
+    let (box_size, title) = data.get_next_box_size_and_title();
 
-    let stsd_size_title: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-    let stsd_title = String::from_utf8_lossy(&stsd_size_title);
-
-    if stsd_title != "stsd" {
-        return Err(format!("not stsd, got {}", stsd_title).into());
+    if title != "stsd" {
+        return Err(format!("not stsd, got {}", title).into());
     }
 
     let mut stsd_box = STSDBox {
-        size: stsd_size,
-        data: data.drain_box_data(stsd_size),
+        size: box_size,
+        data: data.drain_box_data(box_size),
         avcc: None,
     };
 
@@ -425,13 +415,9 @@ pub fn get_stbl_box(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Er
     let mut stss_box: Option<STSSBox> = None;
 
     while data.len() > 0 {
-        let box_size_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let box_size = u32::from_be_bytes(box_size_bytes);
+        let (box_size, title) = data.get_next_box_size_and_title();
 
-        let box_title_bytes: [u8; 4] = data.drain(..4).collect::<Vec<u8>>().try_into().unwrap();
-        let box_title = String::from_utf8_lossy(&box_title_bytes);
-
-        match box_title.as_ref() {
+        match title.as_ref() {
             "stts" => {
                 stts_box = Some(STTSBox {
                     size: box_size,
@@ -468,7 +454,7 @@ pub fn get_stbl_box(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Er
                     data: data.drain_box_data(box_size),
                 });
             }
-            _ => return Err(format!("Unknown stbl sub-box, got {}", box_title).into()),
+            _ => return Err(format!("Unknown stbl sub-box, got {}", title).into()),
         }
     }
 
