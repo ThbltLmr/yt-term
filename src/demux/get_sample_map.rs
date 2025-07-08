@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, error::Error, usize};
 
-use super::moov::{MOOVBox, STCOBox, STSCBox, STSZBox, Streams};
+use super::get_moov_box::{MOOVBox, STCOBox, STSCBox, STSZBox, Streams};
 
 pub type SampleMap = VecDeque<SampleData>;
 

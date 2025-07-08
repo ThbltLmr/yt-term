@@ -5,7 +5,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::usize;
 
-use crate::demux::get_moov_box::{get_moov_box, FTYPBox, MOOVBox};
+use crate::demux::get_moov_box::{get_moov_box, FTYPBox, MOOVBox, Streams};
 
 use crate::demux::get_sample_map::get_sample_map;
 use crate::helpers::structs::ContentQueue;
@@ -230,6 +230,63 @@ impl Demultiplexer {
                                             self.nal_length_size = self.get_bit(avcc_data[4], 0)
                                                 + self.get_bit(avcc_data[4], 1) * 2
                                                 + 1;
+                                        }
+
+                                        if let Streams::Video = trak.media.minf.header {
+                                            let mdhd = trak.media.mdhd.clone();
+
+                                            let version_byte = mdhd.data[0];
+
+                                            let timescale: u32;
+
+                                            match version_byte {
+                                                0 => {
+                                                    let timescale_bytes: [u8; 4] =
+                                                        mdhd.data[12..=15].try_into().unwrap();
+
+                                                    timescale = u32::from_be_bytes(timescale_bytes);
+                                                }
+                                                1 => {
+                                                    let timescale_bytes: [u8; 4] =
+                                                        mdhd.data[20..=23].try_into().unwrap();
+
+                                                    timescale = u32::from_be_bytes(timescale_bytes);
+                                                }
+                                                _ => {
+                                                    panic!("Unknown mdhd version");
+                                                }
+                                            }
+
+                                            let mut stts = trak.media.minf.stbl.stts.clone();
+
+                                            stts.data.drain(..4);
+
+                                            let entry_count_bytes: [u8; 4] = stts
+                                                .data
+                                                .drain(..4)
+                                                .collect::<Vec<u8>>()
+                                                .try_into()
+                                                .unwrap();
+
+                                            let entry_count: u32 =
+                                                u32::from_be_bytes(entry_count_bytes);
+
+                                            assert_eq!(entry_count, 1);
+
+                                            stts.data.drain(..4);
+
+                                            let sample_delta_bytes: [u8; 4] = stts
+                                                .data
+                                                .drain(..4)
+                                                .collect::<Vec<u8>>()
+                                                .try_into()
+                                                .unwrap();
+
+                                            let sample_delta: u32 =
+                                                u32::from_be_bytes(sample_delta_bytes);
+
+                                            self.frame_interval_ms =
+                                                1000 / (timescale / sample_delta) as usize;
                                         }
                                     }
 

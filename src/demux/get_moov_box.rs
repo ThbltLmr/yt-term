@@ -125,7 +125,7 @@ pub struct HDLRBox {
 #[derive(Clone)]
 pub struct MDHDBox {
     pub size: u32,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
