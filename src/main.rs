@@ -21,10 +21,7 @@ mod demux {
     mod get_sample_map;
 }
 
-use std::{
-    sync::{mpsc::channel, Arc, Mutex},
-    thread,
-};
+use std::{sync::mpsc::channel, thread};
 
 use demux::demultiplexer::Demultiplexer;
 use helpers::{
@@ -50,12 +47,6 @@ fn main() {
     let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url, width, height } = parse_args();
-
-    let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
-    let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
-    let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
-    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
-    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
 
     let mut demux = Demultiplexer::new(
         raw_video_buffer.clone(),
