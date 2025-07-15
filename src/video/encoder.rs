@@ -2,14 +2,11 @@ use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
-use std::{
-    collections::HashMap,
-    sync::{mpsc, Arc, Mutex},
-};
+use std::{collections::HashMap, sync::mpsc};
 
 pub struct Encoder {
-    rgb_buffer: Arc<Mutex<ContentQueue>>,
-    encoded_buffer: Arc<Mutex<ContentQueue>>,
+    rgb_buffer: ContentQueue,
+    encoded_buffer: ContentQueue,
     width: usize,
     height: usize,
     term_width: u16,
@@ -20,8 +17,6 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new(
-        rgb_buffer: Arc<Mutex<ContentQueue>>,
-        encoded_buffer: Arc<Mutex<ContentQueue>>,
         width: usize,
         height: usize,
         streaming_done_rx: mpsc::Receiver<()>,
@@ -38,8 +33,8 @@ impl Encoder {
         }
 
         Ok(Encoder {
-            rgb_buffer,
-            encoded_buffer,
+            rgb_buffer: ContentQueue::new(30),
+            encoded_buffer: ContentQueue::new(30),
             width,
             height,
             term_width,
@@ -76,7 +71,6 @@ impl Encoder {
 
     pub fn encode(&mut self) -> Res<()> {
         loop {
-            let mut rgb_buffer = self.rgb_buffer.lock().unwrap();
             let x_offset = (self.term_width as usize - self.width) / 2;
             let y_offset = (self.term_height as usize - self.height) / 2;
 
@@ -90,13 +84,12 @@ impl Encoder {
                 ("Y".into(), format!("{}", y_offset)),
             ]));
 
-            let frame = rgb_buffer.get_el();
+            let frame = self.rgb_buffer.get_el();
 
             if let Some(frame) = frame {
                 let encoded_frame = self.encode_frame(encoded_control_data, frame);
-                let mut encoded_buffer = self.encoded_buffer.lock().unwrap();
 
-                encoded_buffer.push_el(encoded_frame);
+                self.encoded_buffer.push_el(encoded_frame);
             } else if self.streaming_done_rx.try_recv().is_ok() {
                 self.encoding_done_tx.send(()).unwrap();
                 return Ok(());
@@ -134,24 +127,14 @@ impl Encoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::mpsc;
 
     #[test]
     fn test_new_encoder() {
-        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(
-            rgb_buffer.clone(),
-            encoded_buffer.clone(),
-            640,
-            480,
-            streaming_done_rx,
-            encoding_done_tx,
-        )
-        .unwrap();
+        let encoder = Encoder::new(640, 480, streaming_done_rx, encoding_done_tx).unwrap();
 
         assert_eq!(encoder.width, 640);
         assert_eq!(encoder.height, 480);
@@ -159,15 +142,7 @@ mod tests {
 
     #[test]
     fn test_encode_control_data() {
-        let encoder = Encoder::new(
-            Arc::new(Mutex::new(ContentQueue::new(1))),
-            Arc::new(Mutex::new(ContentQueue::new(1))),
-            640,
-            480,
-            mpsc::channel().1,
-            mpsc::channel().0,
-        )
-        .unwrap();
+        let encoder = Encoder::new(640, 480, mpsc::channel().1, mpsc::channel().0).unwrap();
 
         let control_data = HashMap::from([
             ("f".into(), "24".into()),
@@ -190,20 +165,10 @@ mod tests {
 
     #[test]
     fn test_get_terminal_size() {
-        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
         let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
         let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(
-            rgb_buffer.clone(),
-            encoded_buffer.clone(),
-            640,
-            480,
-            streaming_done_rx,
-            encoding_done_tx,
-        )
-        .unwrap();
+        let encoder = Encoder::new(640, 480, streaming_done_rx, encoding_done_tx).unwrap();
 
         assert!(
             encoder.term_width > 0 && encoder.term_height > 0,
