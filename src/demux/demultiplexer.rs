@@ -413,3 +413,120 @@ impl Demultiplexer {
         self.demultiplexing_done_tx.send(()).unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc::channel;
+
+    #[test]
+    fn test_get_bit() {
+        let demux = create_test_demux();
+        
+        // Test getting different bits from a byte
+        let test_byte = 0b10101010; // 170 in decimal
+        
+        assert_eq!(demux.get_bit(test_byte, 0), 0); // LSB
+        assert_eq!(demux.get_bit(test_byte, 1), 1);
+        assert_eq!(demux.get_bit(test_byte, 2), 0);
+        assert_eq!(demux.get_bit(test_byte, 3), 1);
+        assert_eq!(demux.get_bit(test_byte, 4), 0);
+        assert_eq!(demux.get_bit(test_byte, 5), 1);
+        assert_eq!(demux.get_bit(test_byte, 6), 0);
+        assert_eq!(demux.get_bit(test_byte, 7), 1); // MSB
+    }
+
+    #[test]
+    #[should_panic(expected = "Bit index out of bounds")]
+    fn test_get_bit_out_of_bounds() {
+        let demux = create_test_demux();
+        demux.get_bit(0xFF, 8); // Should panic
+    }
+
+    #[test]
+    fn test_convert_avcc_to_annexb_basic() {
+        let demux = create_test_demux();
+        
+        // Test data: 4-byte length (0x00000004) + 4 bytes of NAL data
+        let avcc_data = vec![
+            0x00, 0x00, 0x00, 0x04, // Length: 4 bytes
+            0x67, 0x42, 0x00, 0x1F, // NAL unit data (SPS header example)
+        ];
+        
+        let annexb_data = demux.convert_avcc_to_annexb(&avcc_data);
+        
+        // Expected: start code (0x00000001) + NAL data
+        let expected = vec![
+            0x00, 0x00, 0x00, 0x01, // Start code
+            0x67, 0x42, 0x00, 0x1F, // NAL unit data
+        ];
+        
+        assert_eq!(annexb_data, expected);
+    }
+
+    #[test]
+    fn test_convert_avcc_to_annexb_multiple_nals() {
+        let demux = create_test_demux();
+        
+        // Test data with two NAL units
+        let avcc_data = vec![
+            0x00, 0x00, 0x00, 0x02, // Length: 2 bytes
+            0x67, 0x42,             // First NAL unit
+            0x00, 0x00, 0x00, 0x03, // Length: 3 bytes
+            0x68, 0x43, 0x44,       // Second NAL unit
+        ];
+        
+        let annexb_data = demux.convert_avcc_to_annexb(&avcc_data);
+        
+        let expected = vec![
+            0x00, 0x00, 0x00, 0x01, // Start code for first NAL
+            0x67, 0x42,             // First NAL unit
+            0x00, 0x00, 0x00, 0x01, // Start code for second NAL
+            0x68, 0x43, 0x44,       // Second NAL unit
+        ];
+        
+        assert_eq!(annexb_data, expected);
+    }
+
+    #[test]
+    fn test_convert_avcc_to_annexb_empty_data() {
+        let demux = create_test_demux();
+        let empty_data = vec![];
+        let result = demux.convert_avcc_to_annexb(&empty_data);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_convert_avcc_to_annexb_invalid_length() {
+        let demux = create_test_demux();
+        
+        // Test data with length longer than available data
+        let invalid_data = vec![
+            0x00, 0x00, 0x00, 0x10, // Length: 16 bytes (but only 2 bytes follow)
+            0x67, 0x42,             // Only 2 bytes of data
+        ];
+        
+        let result = demux.convert_avcc_to_annexb(&invalid_data);
+        assert!(result.is_empty()); // Should return empty due to invalid length
+    }
+
+    // Helper function to create a test demux instance
+    fn create_test_demux() -> Demultiplexer {
+        let (tx, _rx) = channel();
+        let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+        let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(44100)));
+        let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+        let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+        
+        Demultiplexer::new(
+            raw_video_buffer,
+            audio_buffer,
+            encoded_video_buffer,
+            ready_video_buffer,
+            tx,
+            "https://example.com/video".to_string(),
+            33, // frame_interval_ms
+            23, // sample_interval_ms
+        )
+    }
+}

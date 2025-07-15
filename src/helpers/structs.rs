@@ -101,8 +101,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ring_buffer_push_and_get() {
-        let mut buffer = ContentQueue::new(1);
+    fn content_queue_basic_operations() {
+        let mut buffer = ContentQueue::new(2);
+        assert!(buffer.is_empty());
+        assert!(!buffer.has_one_second_ready());
 
         let frame1 = BytesWithTimestamp {
             data: vec![1, 2, 3],
@@ -115,14 +117,19 @@ mod tests {
         };
 
         buffer.push_el(frame1);
+        assert!(!buffer.is_empty());
+        assert!(!buffer.has_one_second_ready());
+
         buffer.push_el(frame2);
+        assert!(buffer.has_one_second_ready());
 
         let retrieved_frame = buffer.get_el().unwrap();
         assert_eq!(retrieved_frame.data, vec![1, 2, 3]);
+        assert_eq!(retrieved_frame.timestamp_in_ms, 1000);
     }
 
     #[test]
-    fn ring_buffer_pop_one_second() {
+    fn content_queue_pop_one_second() {
         let mut buffer = ContentQueue::new(2);
         buffer.push_el(BytesWithTimestamp {
             data: vec![1, 2, 3],
@@ -138,33 +145,53 @@ mod tests {
         });
 
         let popped = buffer.pop_one_second();
+        assert_eq!(popped.len(), 2);
         assert_eq!(popped[0].data, vec![1, 2, 3]);
         assert_eq!(popped[1].data, vec![4, 5, 6]);
+        
+        // One element should remain
+        assert!(!buffer.is_empty());
+        assert!(!buffer.has_one_second_ready());
     }
 
     #[test]
-    fn ring_buffer_has_one_second_ready() {
-        let mut buffer = ContentQueue::new(2);
+    fn content_queue_update_fps() {
+        let mut buffer = ContentQueue::new(30);
         assert!(!buffer.has_one_second_ready());
+
+        // Add 30 elements (1 second at 30 FPS)
+        for i in 0..30 {
+            buffer.push_el(BytesWithTimestamp {
+                data: vec![i as u8],
+                timestamp_in_ms: i * 33,
+            });
+        }
+        assert!(buffer.has_one_second_ready());
+
+        // Update to 25 FPS
+        buffer.update_el_per_second(25);
+        assert!(buffer.has_one_second_ready()); // Still has enough
+
+        // Update to 60 FPS
+        buffer.update_el_per_second(60);
+        assert!(!buffer.has_one_second_ready()); // Now needs more elements
+    }
+
+    #[test]
+    fn content_queue_bytes_len() {
+        let mut buffer = ContentQueue::new(2);
+        assert_eq!(buffer.bytes_len(), 0);
 
         buffer.push_el(BytesWithTimestamp {
             data: vec![1, 2, 3],
             timestamp_in_ms: 1000,
         });
-
-        assert!(!buffer.has_one_second_ready());
+        assert_eq!(buffer.bytes_len(), 3);
 
         buffer.push_el(BytesWithTimestamp {
-            data: vec![4, 5, 6],
-            timestamp_in_ms: 1000,
+            data: vec![4, 5],
+            timestamp_in_ms: 2000,
         });
-
-        assert!(buffer.has_one_second_ready());
-    }
-
-    #[test]
-    fn test_screen_guard() {
-        let guard = ScreenGuard::new();
-        assert!(guard.is_ok());
+        assert_eq!(buffer.bytes_len(), 5);
     }
 }

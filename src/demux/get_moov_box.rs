@@ -8,21 +8,21 @@ pub enum Streams {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FTYPBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MVHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct STSDBox {
     pub size: u32,
     pub data: Vec<u8>,
@@ -30,49 +30,49 @@ pub struct STSDBox {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct STTSBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CTTSBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct STSCBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct STSZBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct STCOBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct STSSBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct STBLBbox {
     pub size: u32,
     pub stsd: STSDBox,
@@ -85,28 +85,28 @@ pub struct STBLBbox {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DINFBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VMHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SMHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MINFBox {
     pub size: u32,
     pub header: Streams,
@@ -115,21 +115,21 @@ pub struct MINFBox {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HDLRBox {
     pub size: u32,
     data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MDHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MDIABox {
     pub size: u32,
     pub mdhd: MDHDBox,
@@ -138,14 +138,14 @@ pub struct MDIABox {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TKHDBox {
     pub size: u32,
     pub data: Vec<u8>,
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TRAKBox {
     pub size: u32,
     pub tkhd: TKHDBox,
@@ -153,7 +153,7 @@ pub struct TRAKBox {
 }
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MOOVBox {
     pub size: u32,
     pub mvhd: MVHDBox,
@@ -469,4 +469,92 @@ pub fn get_stbl_box(size: u32, mut data: Vec<u8>) -> Result<STBLBbox, Box<dyn Er
         stsc: stsc_box.ok_or("stts not found")?,
         stss: stss_box,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_drain_to_box_trait() {
+        let mut data = vec![
+            0x00, 0x00, 0x00, 0x10, // size = 16
+            0x6D, 0x6F, 0x6F, 0x76, // "moov"
+            0x01, 0x02, 0x03, 0x04, // 8 bytes of data (16-8=8)
+            0x05, 0x06, 0x07, 0x08,
+        ];
+        
+        let (size, title) = data.get_next_box_size_and_title();
+        assert_eq!(size, 16);
+        assert_eq!(title, "moov");
+        
+        let box_data = data.drain_box_data(size);
+        assert_eq!(box_data, vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+    }
+
+    #[test]
+    fn test_get_next_box_size_and_title() {
+        let mut data = vec![
+            0x00, 0x00, 0x00, 0x18, // size = 24
+            0x66, 0x74, 0x79, 0x70, // "ftyp"
+            0x69, 0x73, 0x6F, 0x6D, // remaining data
+        ];
+        
+        let (size, title) = data.get_next_box_size_and_title();
+        assert_eq!(size, 24);
+        assert_eq!(title, "ftyp");
+        assert_eq!(data.len(), 4); // Only remaining data left
+    }
+
+    #[test]
+    fn test_get_moov_box_with_mvhd() {
+        let data = vec![
+            // mvhd box
+            0x00, 0x00, 0x00, 0x10, // size = 16
+            0x6D, 0x76, 0x68, 0x64, // "mvhd"
+            0x00, 0x00, 0x00, 0x00, // version + flags
+            0x01, 0x02, 0x03, 0x04, // timescale (dummy data)
+        ];
+        
+        let result = get_moov_box(24, data);
+        assert!(result.is_ok());
+        
+        let moov_box = result.unwrap();
+        assert_eq!(moov_box.size, 24);
+        assert_eq!(moov_box.mvhd.size, 16);
+        assert_eq!(moov_box.traks.len(), 0);
+    }
+
+    #[test]
+    fn test_get_moov_box_missing_mvhd() {
+        let data = vec![
+            // Unknown box instead of mvhd
+            0x00, 0x00, 0x00, 0x10, // size = 16
+            0x75, 0x6E, 0x6B, 0x6E, // "unkn"
+            0x00, 0x00, 0x00, 0x00, // dummy data
+            0x01, 0x02, 0x03, 0x04,
+        ];
+        
+        let result = get_moov_box(24, data);
+        assert!(result.is_err());
+        let error_msg = result.err().unwrap().to_string();
+        assert!(error_msg.contains("No mvhd box found"));
+    }
+
+    #[test]
+    fn test_streams_enum_variants() {
+        let video_stream = Streams::Video;
+        let audio_stream = Streams::Audio;
+        
+        // Test that the enum variants exist and can be matched
+        match video_stream {
+            Streams::Video => assert!(true),
+            Streams::Audio => assert!(false),
+        }
+        
+        match audio_stream {
+            Streams::Audio => assert!(true),
+            Streams::Video => assert!(false),
+        }
+    }
 }
