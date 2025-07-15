@@ -7,16 +7,15 @@ use std::sync::mpsc::Receiver;
 use crate::helpers::adapter::Adapter;
 use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
-use crate::{Arc, Mutex};
 
 pub struct AudioAdapter {
     simple: Simple,
-    buffer: Arc<Mutex<ContentQueue>>,
+    buffer: ContentQueue,
     producer_done_rx: Receiver<()>,
 }
 
 impl Adapter for AudioAdapter {
-    fn new(buffer: Arc<Mutex<ContentQueue>>, producer_done_rx: Receiver<()>) -> Res<Self> {
+    fn new(buffer: ContentQueue, producer_done_rx: Receiver<()>) -> Res<Self> {
         let spec = Spec {
             format: Format::F32le,
             channels: 2,
@@ -41,8 +40,8 @@ impl Adapter for AudioAdapter {
         })
     }
 
-    fn get_buffer(&self) -> Arc<Mutex<ContentQueue>> {
-        self.buffer.clone()
+    fn get_buffer(&mut self) -> &mut ContentQueue {
+        &mut self.buffer
     }
 
     fn process_element(&self, sample: BytesWithTimestamp) -> Res<()> {

@@ -18,8 +18,8 @@ impl Adapter for TerminalAdapter {
         })
     }
 
-    fn get_buffer(&self) -> ContentQueue {
-        self.buffer.clone()
+    fn get_buffer(&mut self) -> &mut ContentQueue {
+        &mut self.buffer
     }
 
     fn is_producer_done(&self) -> bool {
