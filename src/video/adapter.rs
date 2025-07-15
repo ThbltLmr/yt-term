@@ -4,22 +4,21 @@ use std::sync::mpsc::Receiver;
 use crate::helpers::adapter::Adapter;
 use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
-use crate::{Arc, Mutex};
 
 pub struct TerminalAdapter {
-    buffer: Arc<Mutex<ContentQueue>>,
+    buffer: ContentQueue,
     producer_done_rx: Receiver<()>,
 }
 
 impl Adapter for TerminalAdapter {
-    fn new(buffer: Arc<Mutex<ContentQueue>>, producer_done_rx: Receiver<()>) -> Res<Self> {
+    fn new(buffer: ContentQueue, producer_done_rx: Receiver<()>) -> Res<Self> {
         Ok(TerminalAdapter {
             buffer,
             producer_done_rx,
         })
     }
 
-    fn get_buffer(&self) -> Arc<Mutex<ContentQueue>> {
+    fn get_buffer(&self) -> ContentQueue {
         self.buffer.clone()
     }
 
@@ -50,7 +49,7 @@ mod tests {
     #[test]
     fn video_adapter_creation() {
         let (_tx, rx) = mpsc::channel();
-        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
+        let encoded_buffer = ContentQueue::new(30);
         let display_manager = TerminalAdapter::new(encoded_buffer.clone(), rx);
 
         assert!(display_manager.is_ok());

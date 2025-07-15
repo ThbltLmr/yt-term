@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use super::types::{BytesWithTimestamp, Res};
 
+#[derive(Clone)]
 pub struct ContentQueue {
     elements: VecDeque<BytesWithTimestamp>,
     el_per_second: usize,
@@ -148,7 +149,7 @@ mod tests {
         assert_eq!(popped.len(), 2);
         assert_eq!(popped[0].data, vec![1, 2, 3]);
         assert_eq!(popped[1].data, vec![4, 5, 6]);
-        
+
         // One element should remain
         assert!(!buffer.is_empty());
         assert!(!buffer.has_one_second_ready());
