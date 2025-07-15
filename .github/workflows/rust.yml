@@ -18,6 +18,8 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install PulseAudio development libraries
       run: sudo apt-get update && sudo apt-get install -y libpulse-dev
+    - name: Install ffmpeg
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
     - name: Build
       run: cargo build --verbose
     - name: Run tests
