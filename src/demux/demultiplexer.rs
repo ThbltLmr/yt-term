@@ -29,7 +29,7 @@ pub struct Demultiplexer {
     pub video_decoder: ffmpeg::decoder::Video,
     pub audio_decoder: ffmpeg::decoder::Audio,
     pub nal_length_size: u8,
-    frame_interval_ms: usize,
+    frame_interval_ms: Option<usize>,
     sample_interval_ms: usize,
 }
 
@@ -38,7 +38,6 @@ impl Demultiplexer {
         raw_video_message_tx: Sender<RawVideoMessage>,
         raw_audio_message_tx: Sender<RawAudioMessage>,
         url: String,
-        frame_interval_ms: usize,
         sample_interval_ms: usize,
     ) -> Self {
         /*
@@ -79,7 +78,7 @@ impl Demultiplexer {
             audio_decoder,
             nal_length_size: 4,
             url,
-            frame_interval_ms,
+            frame_interval_ms: None,
             sample_interval_ms,
         }
     }
@@ -292,7 +291,7 @@ impl Demultiplexer {
                                                 u32::from_be_bytes(sample_delta_bytes);
 
                                             self.frame_interval_ms =
-                                                1000 / (timescale / sample_delta) as usize;
+                                                Some(1000 / (timescale / sample_delta) as usize);
 
                                             let actual_fps = (timescale / sample_delta) as usize;
 
@@ -365,7 +364,8 @@ impl Demultiplexer {
                                                     ),
                                                 );
 
-                                                video_timestamp_in_ms += self.frame_interval_ms;
+                                                video_timestamp_in_ms +=
+                                                    self.frame_interval_ms.unwrap();
                                                 yup_frame = frame::Video::empty();
                                                 rgb_frame = frame::Video::empty();
                                             }
@@ -525,7 +525,6 @@ mod tests {
             audio_tx,
             video_tx,
             "https://example.com/video".to_string(),
-            33, // frame_interval_ms
             23, // sample_interval_ms
         )
     }
