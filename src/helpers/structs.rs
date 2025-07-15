@@ -60,6 +60,10 @@ impl ContentQueue {
     pub fn bytes_len(&self) -> usize {
         self.elements.iter().map(|el| el.data.len()).sum()
     }
+
+    pub fn update_el_per_second(&mut self, new_el_per_second: usize) {
+        self.el_per_second = new_el_per_second;
+    }
 }
 
 pub struct ScreenGuard {}

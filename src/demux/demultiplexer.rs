@@ -17,6 +17,8 @@ pub struct Demultiplexer {
     pub url: String,
     pub rgb_frames_queue: Arc<Mutex<ContentQueue>>,
     pub audio_samples_queue: Arc<Mutex<ContentQueue>>,
+    pub encoded_video_buffer: Arc<Mutex<ContentQueue>>,
+    pub ready_video_buffer: Arc<Mutex<ContentQueue>>,
     pub demultiplexing_done_tx: Sender<()>,
     pub video_decoder: ffmpeg::decoder::Video,
     pub audio_decoder: ffmpeg::decoder::Audio,
@@ -29,6 +31,8 @@ impl Demultiplexer {
     pub fn new(
         rgb_frames_queue: Arc<Mutex<ContentQueue>>,
         audio_samples_queue: Arc<Mutex<ContentQueue>>,
+        encoded_video_buffer: Arc<Mutex<ContentQueue>>,
+        ready_video_buffer: Arc<Mutex<ContentQueue>>,
         demultiplexing_done_tx: Sender<()>,
         url: String,
         frame_interval_ms: usize,
@@ -68,6 +72,8 @@ impl Demultiplexer {
         Self {
             rgb_frames_queue,
             audio_samples_queue,
+            encoded_video_buffer,
+            ready_video_buffer,
             demultiplexing_done_tx,
             video_decoder,
             audio_decoder,
@@ -287,6 +293,12 @@ impl Demultiplexer {
 
                                             self.frame_interval_ms =
                                                 1000 / (timescale / sample_delta) as usize;
+                                            
+                                            let actual_fps = (timescale / sample_delta) as usize;
+                                            
+                                            self.rgb_frames_queue.lock().unwrap().update_el_per_second(actual_fps);
+                                            self.encoded_video_buffer.lock().unwrap().update_el_per_second(actual_fps);
+                                            self.ready_video_buffer.lock().unwrap().update_el_per_second(actual_fps);
                                         }
                                     }
 
