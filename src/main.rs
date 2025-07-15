@@ -54,10 +54,14 @@ fn main() {
     let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
     let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
     let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
+    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
+    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
 
     let mut demux = Demultiplexer::new(
         raw_video_buffer.clone(),
         audio_buffer.clone(),
+        encoded_video_buffer.clone(),
+        ready_video_buffer.clone(),
         demultiplexing_done_tx,
         url,
         frame_interval_ms,
@@ -86,9 +90,6 @@ fn main() {
     thread::spawn(move || {
         encoder.encode().expect("Failed to start encoding");
     });
-
-    let ready_audio_buffer = Arc::new(Mutex::new(ContentQueue::new(samples_per_second)));
-    let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(frames_per_second)));
 
     let audio_adapter =
         audio::adapter::AudioAdapter::new(ready_audio_buffer.clone(), audio_queueing_done_rx)
