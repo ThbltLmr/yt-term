@@ -11,7 +11,7 @@ use super::{
 };
 
 pub trait Adapter {
-    fn new(buffer: ContentQueue, producer_done_rx: Receiver<()>) -> Res<Self>
+    fn new(buffer: ContentQueue, producer_rx: Receiver<()>) -> Res<Self>
     where
         Self: Sized;
 

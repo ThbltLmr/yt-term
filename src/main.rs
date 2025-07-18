@@ -49,10 +49,6 @@ fn main() {
     let Args { url, width, height } = parse_args();
 
     let mut demux = Demultiplexer::new(
-        raw_video_buffer.clone(),
-        audio_buffer.clone(),
-        encoded_video_buffer.clone(),
-        ready_video_buffer.clone(),
         demultiplexing_done_tx,
         url,
         frame_interval_ms,

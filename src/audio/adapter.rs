@@ -11,11 +11,11 @@ use crate::helpers::types::{BytesWithTimestamp, Res};
 pub struct AudioAdapter {
     simple: Simple,
     buffer: ContentQueue,
-    producer_done_rx: Receiver<()>,
+    producer_rx: Receiver<()>,
 }
 
 impl Adapter for AudioAdapter {
-    fn new(buffer: ContentQueue, producer_done_rx: Receiver<()>) -> Res<Self> {
+    fn new(buffer: ContentQueue, producer_rx: Receiver<()>) -> Res<Self> {
         let spec = Spec {
             format: Format::F32le,
             channels: 2,
@@ -35,7 +35,7 @@ impl Adapter for AudioAdapter {
 
         Ok(AudioAdapter {
             buffer,
-            producer_done_rx,
+            producer_rx,
             simple,
         })
     }
@@ -51,7 +51,7 @@ impl Adapter for AudioAdapter {
     }
 
     fn is_producer_done(&self) -> bool {
-        self.producer_done_rx.try_recv().is_ok()
+        self.producer_rx.try_recv().is_ok()
     }
 }
 

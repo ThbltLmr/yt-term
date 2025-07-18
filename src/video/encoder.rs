@@ -11,16 +11,16 @@ pub struct Encoder {
     height: usize,
     term_width: u16,
     term_height: u16,
-    streaming_done_rx: mpsc::Receiver<()>,
-    encoding_done_tx: mpsc::Sender<()>,
+    producer_rx: mpsc::Receiver<()>,
+    producer_tx: mpsc::Sender<()>,
 }
 
 impl Encoder {
     pub fn new(
         width: usize,
         height: usize,
-        streaming_done_rx: mpsc::Receiver<()>,
-        encoding_done_tx: mpsc::Sender<()>,
+        producer_rx: mpsc::Receiver<()>,
+        producer_tx: mpsc::Sender<()>,
     ) -> Res<Self> {
         let (term_width, term_height) = Self::get_terminal_size().unwrap_or((1280, 720));
 
@@ -39,8 +39,8 @@ impl Encoder {
             height,
             term_width,
             term_height,
-            streaming_done_rx,
-            encoding_done_tx,
+            producer_rx,
+            producer_tx,
         })
     }
 
@@ -90,8 +90,8 @@ impl Encoder {
                 let encoded_frame = self.encode_frame(encoded_control_data, frame);
 
                 self.encoded_buffer.push_el(encoded_frame);
-            } else if self.streaming_done_rx.try_recv().is_ok() {
-                self.encoding_done_tx.send(()).unwrap();
+            } else if self.producer_rx.try_recv().is_ok() {
+                self.producer_tx.send(()).unwrap();
                 return Ok(());
             }
         }
@@ -131,10 +131,10 @@ mod tests {
 
     #[test]
     fn test_new_encoder() {
-        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
-        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
+        let (_streaming_done_tx, producer_rx) = mpsc::channel();
+        let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(640, 480, streaming_done_rx, encoding_done_tx).unwrap();
+        let encoder = Encoder::new(640, 480, producer_rx, producer_tx).unwrap();
 
         assert_eq!(encoder.width, 640);
         assert_eq!(encoder.height, 480);
@@ -165,10 +165,10 @@ mod tests {
 
     #[test]
     fn test_get_terminal_size() {
-        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
-        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
+        let (_streaming_done_tx, producer_rx) = mpsc::channel();
+        let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(640, 480, streaming_done_rx, encoding_done_tx).unwrap();
+        let encoder = Encoder::new(640, 480, producer_rx, producer_tx).unwrap();
 
         assert!(
             encoder.term_width > 0 && encoder.term_height > 0,
