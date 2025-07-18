@@ -3,7 +3,9 @@ use pulse::stream::Direction;
 use simple_pulse::Simple;
 
 use std::sync::mpsc::Receiver;
+use std::time::Instant;
 
+use crate::demux::demultiplexer::RawAudioMessage;
 use crate::helpers::adapter::Adapter;
 use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
@@ -11,11 +13,11 @@ use crate::helpers::types::{BytesWithTimestamp, Res};
 pub struct AudioAdapter {
     simple: Simple,
     buffer: ContentQueue,
-    producer_rx: Receiver<()>,
+    producer_rx: Receiver<RawAudioMessage>,
 }
 
-impl Adapter for AudioAdapter {
-    fn new(buffer: ContentQueue, producer_rx: Receiver<()>) -> Res<Self> {
+impl Adapter<RawAudioMessage> for AudioAdapter {
+    fn new(el_per_second: usize, producer_rx: Receiver<RawAudioMessage>) -> Res<Self> {
         let spec = Spec {
             format: Format::F32le,
             channels: 2,
@@ -32,6 +34,8 @@ impl Adapter for AudioAdapter {
             None,
             None,
         )?;
+
+        let buffer = ContentQueue::new(el_per_second);
 
         Ok(AudioAdapter {
             buffer,
@@ -52,6 +56,41 @@ impl Adapter for AudioAdapter {
 
     fn is_producer_done(&self) -> bool {
         self.producer_rx.try_recv().is_ok()
+    }
+
+    fn run(&mut self) -> Res<()> {
+        let mut start_time: Instant;
+        let mut started_playing = false;
+
+        loop {
+            if self.is_buffer_empty() {
+                if self.is_producer_done() {
+                    return Ok(());
+                }
+            } else if let Some(element) = self.get_buffer_element() {
+                if !started_playing {
+                    start_time = Instant::now();
+                    started_playing = true;
+                }
+
+                while element.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
+                    thread::sleep(Duration::from_millis(1));
+                }
+
+                if element.timestamp_in_ms + 5 <= start_time.elapsed().as_millis() as usize {
+                    continue;
+                }
+
+                assert!(
+                    element
+                        .timestamp_in_ms
+                        .abs_diff(start_time.elapsed().as_millis() as usize)
+                        < 5
+                );
+
+                self.process_element(element)?;
+            }
+        }
     }
 }
 

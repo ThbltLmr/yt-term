@@ -1,26 +1,32 @@
+use crate::demux::demultiplexer::RawVideoMessage;
 use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
 use std::{collections::HashMap, sync::mpsc};
 
+pub enum EncodedVideoMessage {
+    EncodedVideoMessage(BytesWithTimestamp),
+    FramesPerSecond(usize),
+    Done,
+}
+
 pub struct Encoder {
     rgb_buffer: ContentQueue,
-    encoded_buffer: ContentQueue,
     width: usize,
     height: usize,
     term_width: u16,
     term_height: u16,
-    producer_rx: mpsc::Receiver<()>,
-    producer_tx: mpsc::Sender<()>,
+    producer_rx: mpsc::Receiver<RawVideoMessage>,
+    producer_tx: mpsc::Sender<EncodedVideoMessage>,
 }
 
 impl Encoder {
     pub fn new(
         width: usize,
         height: usize,
-        producer_rx: mpsc::Receiver<()>,
-        producer_tx: mpsc::Sender<()>,
+        producer_rx: mpsc::Receiver<RawVideoMessage>,
+        producer_tx: mpsc::Sender<EncodedVideoMessage>,
     ) -> Res<Self> {
         let (term_width, term_height) = Self::get_terminal_size().unwrap_or((1280, 720));
 
@@ -34,7 +40,6 @@ impl Encoder {
 
         Ok(Encoder {
             rgb_buffer: ContentQueue::new(30),
-            encoded_buffer: ContentQueue::new(30),
             width,
             height,
             term_width,
@@ -47,7 +52,7 @@ impl Encoder {
     // Convert a frame to the Kitty Graphics Protocol format
     fn encode_frame(
         &self,
-        encoded_control_data: Vec<u8>,
+        encoded_control_data: &Vec<u8>,
         frame: BytesWithTimestamp,
     ) -> BytesWithTimestamp {
         // Base64 encode the frame data
@@ -70,29 +75,37 @@ impl Encoder {
     }
 
     pub fn encode(&mut self) -> Res<()> {
+        let x_offset = (self.term_width as usize - self.width) / 2;
+        let y_offset = (self.term_height as usize - self.height) / 2;
+
+        let encoded_control_data = self.encode_control_data(HashMap::from([
+            ("f".into(), "24".into()),
+            ("s".into(), format!("{}", self.width)),
+            ("v".into(), format!("{}", self.height)),
+            ("t".into(), "d".into()),
+            ("a".into(), "T".into()),
+            ("X".into(), format!("{}", x_offset)),
+            ("Y".into(), format!("{}", y_offset)),
+        ]));
+
         loop {
-            let x_offset = (self.term_width as usize - self.width) / 2;
-            let y_offset = (self.term_height as usize - self.height) / 2;
+            match self.producer_rx.try_recv() {
+                Ok(message) => match message {
+                    RawVideoMessage::VideoMessage(frame) => {
+                        let encoded_frame = self.encode_frame(&encoded_control_data, frame);
 
-            let encoded_control_data = self.encode_control_data(HashMap::from([
-                ("f".into(), "24".into()),
-                ("s".into(), format!("{}", self.width)),
-                ("v".into(), format!("{}", self.height)),
-                ("t".into(), "d".into()),
-                ("a".into(), "T".into()),
-                ("X".into(), format!("{}", x_offset)),
-                ("Y".into(), format!("{}", y_offset)),
-            ]));
-
-            let frame = self.rgb_buffer.get_el();
-
-            if let Some(frame) = frame {
-                let encoded_frame = self.encode_frame(encoded_control_data, frame);
-
-                self.encoded_buffer.push_el(encoded_frame);
-            } else if self.producer_rx.try_recv().is_ok() {
-                self.producer_tx.send(()).unwrap();
-                return Ok(());
+                        self.producer_tx
+                            .send(EncodedVideoMessage::EncodedVideoMessage(encoded_frame));
+                    }
+                    RawVideoMessage::FramesPerSecond(fps) => {
+                        self.producer_tx
+                            .send(EncodedVideoMessage::FramesPerSecond(fps));
+                    }
+                    RawVideoMessage::Done => {
+                        self.producer_tx.send(EncodedVideoMessage::Done);
+                    }
+                },
+                _ => {}
             }
         }
     }

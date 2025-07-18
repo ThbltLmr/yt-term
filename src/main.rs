@@ -23,22 +23,22 @@ mod demux {
 
 use std::{sync::mpsc::channel, thread};
 
-use demux::demultiplexer::Demultiplexer;
+use audio::adapter::AudioAdapter;
+use demux::demultiplexer::{Demultiplexer, RawAudioMessage, RawVideoMessage};
 use helpers::{
     adapter::Adapter,
     args::{parse_args, Args},
     structs::{ContentQueue, ScreenGuard},
 };
+use video::encoder::{EncodedVideoMessage, Encoder};
 
 fn main() {
     ffmpeg_next::init().unwrap();
 
-    let (demultiplexer_audio_tx, demultiplexer_audio_rx) = channel();
-    let (demultiplexer_video_tx, demultiplexer_video_rx) = channel();
-    let (video_encoding_tx, video_encoding_rx) = channel();
-    let (audio_queueing_tx, audio_queueing_rx) = channel();
-    let (video_queueing_tx, video_queueing_rx) = channel();
-    let (playing_tx, playing_rx) = channel();
+    let (demultiplexer_audio_tx, demultiplexer_audio_rx) = channel::<RawAudioMessage>();
+    let (demultiplexer_video_tx, demultiplexer_video_rx) = channel::<RawVideoMessage>();
+    let (video_encoding_tx, video_encoding_rx) = channel::<EncodedVideoMessage>();
+    let (playing_tx, playing_rx) = channel::<()>();
 
     let frames_per_second = 30;
     let frame_interval_ms = 1000 / frames_per_second;
@@ -64,31 +64,22 @@ fn main() {
         demux.demux();
     });
 
-    let mut encoder = video::encoder::Encoder::new(
-        raw_video_buffer.clone(),
-        encoded_video_buffer.clone(),
-        width,
-        height,
-        demultiplexer_tx,
-        video_encoding_tx,
-    )
-    .expect("Failed to create encoder");
+    let mut encoder = Encoder::new(width, height, demultiplexer_video_rx, video_encoding_tx)
+        .expect("Failed to create encoder");
 
     thread::spawn(move || {
         encoder.encode().expect("Failed to start encoding");
     });
 
     let audio_adapter =
-        audio::adapter::AudioAdapter::new(ready_audio_buffer.clone(), audio_queueing_rx)
-            .expect("Failed to create audio adapter");
+        AudioAdapter::new(demultiplexer_audio_rx).expect("Failed to create audio adapter");
 
     thread::spawn(move || {
         audio_adapter.run().expect("Failed to start audio playback");
     });
 
-    let video_adapter =
-        video::adapter::TerminalAdapter::new(ready_video_buffer.clone(), video_queueing_rx)
-            .expect("Failed to create video adapter");
+    let video_adapter = video::adapter::TerminalAdapter::new(video_encoding_rx)
+        .expect("Failed to create video adapter");
 
     thread::spawn(move || {
         video_adapter.run().expect("Failed to start video display");

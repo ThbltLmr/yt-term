@@ -10,8 +10,8 @@ use super::{
     types::{BytesWithTimestamp, Res},
 };
 
-pub trait Adapter {
-    fn new(buffer: ContentQueue, producer_rx: Receiver<()>) -> Res<Self>
+pub trait Adapter<T> {
+    fn new(el_per_second: usize, producer_rx: Receiver<T>) -> Res<Self>
     where
         Self: Sized;
 
