@@ -33,7 +33,12 @@ use helpers::{
 fn main() {
     ffmpeg_next::init().unwrap();
 
-    let (demultiplexing_done_tx, demultiplexing_done_rx) = channel();
+    let (demultiplexer_audio_tx, demultiplexer_audio_rx) = channel();
+    let (demultiplexer_video_tx, demultiplexer_video_rx) = channel();
+    let (video_encoding_tx, video_encoding_rx) = channel();
+    let (audio_queueing_tx, audio_queueing_rx) = channel();
+    let (video_queueing_tx, video_queueing_rx) = channel();
+    let (playing_tx, playing_rx) = channel();
 
     let frames_per_second = 30;
     let frame_interval_ms = 1000 / frames_per_second;
@@ -49,28 +54,23 @@ fn main() {
     let Args { url, width, height } = parse_args();
 
     let mut demux = Demultiplexer::new(
-        demultiplexing_done_tx,
+        demultiplexer_video_tx,
+        demultiplexer_audio_tx,
         url,
         frame_interval_ms,
-        sample_interval_ms,
     );
 
     thread::spawn(move || {
         demux.demux();
     });
 
-    let (video_encoding_done_tx, video_encoding_done_rx) = channel();
-    let (audio_queueing_done_tx, audio_queueing_done_rx) = channel();
-    let (video_queueing_done_tx, video_queueing_done_rx) = channel();
-    let (playing_done_tx, playing_done_rx) = channel();
-
     let mut encoder = video::encoder::Encoder::new(
         raw_video_buffer.clone(),
         encoded_video_buffer.clone(),
         width,
         height,
-        demultiplexing_done_rx,
-        video_encoding_done_tx,
+        demultiplexer_tx,
+        video_encoding_tx,
     )
     .expect("Failed to create encoder");
 
@@ -79,7 +79,7 @@ fn main() {
     });
 
     let audio_adapter =
-        audio::adapter::AudioAdapter::new(ready_audio_buffer.clone(), audio_queueing_done_rx)
+        audio::adapter::AudioAdapter::new(ready_audio_buffer.clone(), audio_queueing_rx)
             .expect("Failed to create audio adapter");
 
     thread::spawn(move || {
@@ -87,7 +87,7 @@ fn main() {
     });
 
     let video_adapter =
-        video::adapter::TerminalAdapter::new(ready_video_buffer.clone(), video_queueing_done_rx)
+        video::adapter::TerminalAdapter::new(ready_video_buffer.clone(), video_queueing_rx)
             .expect("Failed to create video adapter");
 
     thread::spawn(move || {
@@ -100,7 +100,7 @@ fn main() {
         audio_buffer.clone(),
         ready_video_buffer.clone(),
         ready_audio_buffer.clone(),
-        playing_done_rx,
+        playing_rx,
     )
     .expect("Failed to create logger");
 
@@ -109,18 +109,18 @@ fn main() {
     });
 
     loop {
-        if video_encoding_done_rx.try_recv().is_ok()
+        if video_encoding_rx.try_recv().is_ok()
             && encoded_video_buffer.lock().unwrap().is_empty()
             && audio_buffer.lock().unwrap().is_empty()
         {
-            audio_queueing_done_tx
+            audio_queueing_tx
                 .send(())
                 .expect("Failed to send audio queueing done signal");
-            video_queueing_done_tx
+            video_queueing_tx
                 .send(())
                 .expect("Failed to send audio queueing done signal");
 
-            playing_done_tx
+            playing_tx
                 .send(())
                 .expect("Failed to send playing done signal");
 
