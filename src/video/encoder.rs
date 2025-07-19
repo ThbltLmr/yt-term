@@ -91,14 +91,11 @@ impl Encoder {
                         let encoded_frame = self.encode_frame(&encoded_control_data, frame);
 
                         self.producer_tx
-                            .send(EncodedVideoMessage::EncodedVideoMessage(encoded_frame));
-                    }
-                    RawVideoMessage::FramesPerSecond(fps) => {
-                        self.producer_tx
-                            .send(EncodedVideoMessage::FramesPerSecond(fps));
+                            .send(EncodedVideoMessage::EncodedVideoMessage(encoded_frame))
+                            .unwrap();
                     }
                     RawVideoMessage::Done => {
-                        self.producer_tx.send(EncodedVideoMessage::Done);
+                        self.producer_tx.send(EncodedVideoMessage::Done).unwrap();
                     }
                 },
                 _ => {}

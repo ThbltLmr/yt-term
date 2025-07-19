@@ -1,5 +1,7 @@
 use std::io::{self, Write};
 use std::sync::mpsc::Receiver;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::helpers::types::{BytesWithTimestamp, Res};
 
@@ -10,16 +12,8 @@ pub struct TerminalAdapter {
 }
 
 impl TerminalAdapter {
-    fn new(producer_rx: Receiver<EncodedVideoMessage>) -> Res<Self> {
+    pub fn new(producer_rx: Receiver<EncodedVideoMessage>) -> Res<Self> {
         Ok(TerminalAdapter { producer_rx })
-    }
-
-    fn get_buffer(&mut self) -> &mut ContentQueue {
-        &mut self.buffer
-    }
-
-    fn is_producer_done(&self) -> bool {
-        self.producer_rx.try_recv().is_ok()
     }
 
     fn process_element(&self, frame: BytesWithTimestamp) -> Res<()> {
@@ -35,6 +29,35 @@ impl TerminalAdapter {
         stdout.flush()?;
         Ok(())
     }
+
+    pub fn run(&mut self) -> Res<()> {
+        let mut start_time = Instant::now();
+        let mut started_playing = false;
+
+        loop {
+            match self.producer_rx.try_recv() {
+                Ok(message) => match message {
+                    EncodedVideoMessage::EncodedVideoMessage(frame) => {
+                        if !started_playing {
+                            started_playing = true;
+                            start_time = Instant::now();
+                        }
+
+                        if frame.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
+                            thread::sleep(Duration::from_millis(
+                                (frame.timestamp_in_ms - start_time.elapsed().as_millis() as usize)
+                                    as u64,
+                            ));
+                        }
+
+                        self.process_element(frame).unwrap();
+                    }
+                    EncodedVideoMessage::Done => {}
+                },
+                Err(_) => {}
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -45,8 +68,7 @@ mod tests {
     #[test]
     fn video_adapter_creation() {
         let (_tx, rx) = mpsc::channel();
-        let encoded_buffer = ContentQueue::new(30);
-        let display_manager = TerminalAdapter::new(encoded_buffer.clone(), rx);
+        let display_manager = TerminalAdapter::new(rx);
 
         assert!(display_manager.is_ok());
     }

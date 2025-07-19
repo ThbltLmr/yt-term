@@ -295,11 +295,6 @@ impl Demultiplexer {
 
                                             self.frame_interval_ms =
                                                 Some(1000 / (timescale / sample_delta) as usize);
-
-                                            let actual_fps = (timescale / sample_delta) as usize;
-
-                                            self.raw_video_message_tx
-                                                .send(RawVideoMessage::FramesPerSecond(actual_fps));
                                         }
                                     }
 
@@ -358,14 +353,14 @@ impl Demultiplexer {
 
                                                 assert_eq!(data.len(), 640 * 360 * 3);
 
-                                                self.raw_video_message_tx.send(
-                                                    RawVideoMessage::VideoMessage(
+                                                self.raw_video_message_tx
+                                                    .send(RawVideoMessage::VideoMessage(
                                                         BytesWithTimestamp {
                                                             data: data.to_vec(),
                                                             timestamp_in_ms: video_timestamp_in_ms,
                                                         },
-                                                    ),
-                                                );
+                                                    ))
+                                                    .unwrap();
 
                                                 video_timestamp_in_ms +=
                                                     self.frame_interval_ms.unwrap();
@@ -389,12 +384,14 @@ impl Demultiplexer {
 
                                             assert_eq!(data.len(), 8192);
 
-                                            self.raw_audio_message_tx.send(
-                                                RawAudioMessage::AudioMessage(BytesWithTimestamp {
-                                                    data: data.to_vec(),
-                                                    timestamp_in_ms: audio_timestamp_in_ms,
-                                                }),
-                                            );
+                                            self.raw_audio_message_tx
+                                                .send(RawAudioMessage::AudioMessage(
+                                                    BytesWithTimestamp {
+                                                        data: data.to_vec(),
+                                                        timestamp_in_ms: audio_timestamp_in_ms,
+                                                    },
+                                                ))
+                                                .unwrap();
 
                                             audio_timestamp_in_ms += self.sample_interval_ms;
                                             frame = frame::Audio::empty();

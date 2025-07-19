@@ -15,7 +15,7 @@ pub struct AudioAdapter {
 }
 
 impl AudioAdapter {
-    fn newp(producer_rx: Receiver<RawAudioMessage>) -> Res<Self> {
+    pub fn new(producer_rx: Receiver<RawAudioMessage>) -> Res<Self> {
         let spec = Spec {
             format: Format::F32le,
             channels: 2,
@@ -45,8 +45,8 @@ impl AudioAdapter {
         Ok(())
     }
 
-    fn run(&mut self) -> Res<()> {
-        let mut start_time: Instant;
+    pub fn run(&mut self) -> Res<()> {
+        let mut start_time = Instant::now();
         let mut started_playing = false;
 
         loop {
@@ -57,13 +57,15 @@ impl AudioAdapter {
                             started_playing = true;
                             start_time = Instant::now();
                         }
+
                         if sample.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
                             thread::sleep(Duration::from_millis(
-                                sample.timestamp_in_ms - start_time.elapsed().as_millis(),
+                                (sample.timestamp_in_ms - start_time.elapsed().as_millis() as usize)
+                                    as u64,
                             ));
                         }
 
-                        self.process_element(sample);
+                        self.process_element(sample).unwrap();
                     }
                     RawAudioMessage::Done => {}
                 },
