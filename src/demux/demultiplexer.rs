@@ -2,41 +2,41 @@ use ffmpeg_next::{self as ffmpeg, frame, Packet};
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
 use std::usize;
 
 use crate::demux::get_moov_box::{get_moov_box, FTYPBox, MOOVBox, Streams};
 
 use crate::demux::get_sample_map::get_sample_map;
-use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::BytesWithTimestamp;
 
 use super::get_sample_map::SampleMap;
 
+pub enum RawAudioMessage {
+    AudioMessage(BytesWithTimestamp),
+    Done,
+}
+
+pub enum RawVideoMessage {
+    VideoMessage(BytesWithTimestamp),
+    Done,
+}
+
 pub struct Demultiplexer {
     pub url: String,
-    pub rgb_frames_queue: Arc<Mutex<ContentQueue>>,
-    pub audio_samples_queue: Arc<Mutex<ContentQueue>>,
-    pub encoded_video_buffer: Arc<Mutex<ContentQueue>>,
-    pub ready_video_buffer: Arc<Mutex<ContentQueue>>,
-    pub demultiplexing_done_tx: Sender<()>,
+    pub raw_video_message_tx: Sender<RawVideoMessage>,
+    pub raw_audio_message_tx: Sender<RawAudioMessage>,
     pub video_decoder: ffmpeg::decoder::Video,
     pub audio_decoder: ffmpeg::decoder::Audio,
     pub nal_length_size: u8,
-    frame_interval_ms: usize,
+    frame_interval_ms: Option<usize>,
     sample_interval_ms: usize,
 }
 
 impl Demultiplexer {
     pub fn new(
-        rgb_frames_queue: Arc<Mutex<ContentQueue>>,
-        audio_samples_queue: Arc<Mutex<ContentQueue>>,
-        encoded_video_buffer: Arc<Mutex<ContentQueue>>,
-        ready_video_buffer: Arc<Mutex<ContentQueue>>,
-        demultiplexing_done_tx: Sender<()>,
+        raw_video_message_tx: Sender<RawVideoMessage>,
+        raw_audio_message_tx: Sender<RawAudioMessage>,
         url: String,
-        frame_interval_ms: usize,
-        sample_interval_ms: usize,
     ) -> Self {
         /*
          * This is a very hacky fix to initiate an AVContext.
@@ -69,17 +69,19 @@ impl Demultiplexer {
 
         let audio_decoder = audio_context.decoder().audio().unwrap();
 
+        let audio_bytes_per_second = 44100 * 2 * 4;
+        let audio_sample_size = 8192;
+
+        let samples_per_second = audio_bytes_per_second / audio_sample_size;
+        let sample_interval_ms = 1000 / samples_per_second;
         Self {
-            rgb_frames_queue,
-            audio_samples_queue,
-            encoded_video_buffer,
-            ready_video_buffer,
-            demultiplexing_done_tx,
+            raw_video_message_tx,
+            raw_audio_message_tx,
             video_decoder,
             audio_decoder,
             nal_length_size: 4,
             url,
-            frame_interval_ms,
+            frame_interval_ms: None,
             sample_interval_ms,
         }
     }
@@ -292,13 +294,7 @@ impl Demultiplexer {
                                                 u32::from_be_bytes(sample_delta_bytes);
 
                                             self.frame_interval_ms =
-                                                1000 / (timescale / sample_delta) as usize;
-                                            
-                                            let actual_fps = (timescale / sample_delta) as usize;
-                                            
-                                            self.rgb_frames_queue.lock().unwrap().update_el_per_second(actual_fps);
-                                            self.encoded_video_buffer.lock().unwrap().update_el_per_second(actual_fps);
-                                            self.ready_video_buffer.lock().unwrap().update_el_per_second(actual_fps);
+                                                Some(1000 / (timescale / sample_delta) as usize);
                                         }
                                     }
 
@@ -357,14 +353,17 @@ impl Demultiplexer {
 
                                                 assert_eq!(data.len(), 640 * 360 * 3);
 
-                                                self.rgb_frames_queue.lock().unwrap().push_el(
-                                                    BytesWithTimestamp {
-                                                        data: data.to_vec(),
-                                                        timestamp_in_ms: video_timestamp_in_ms,
-                                                    },
-                                                );
+                                                self.raw_video_message_tx
+                                                    .send(RawVideoMessage::VideoMessage(
+                                                        BytesWithTimestamp {
+                                                            data: data.to_vec(),
+                                                            timestamp_in_ms: video_timestamp_in_ms,
+                                                        },
+                                                    ))
+                                                    .unwrap();
 
-                                                video_timestamp_in_ms += self.frame_interval_ms;
+                                                video_timestamp_in_ms +=
+                                                    self.frame_interval_ms.unwrap();
                                                 yup_frame = frame::Video::empty();
                                                 rgb_frame = frame::Video::empty();
                                             }
@@ -385,12 +384,14 @@ impl Demultiplexer {
 
                                             assert_eq!(data.len(), 8192);
 
-                                            self.audio_samples_queue.lock().unwrap().push_el(
-                                                BytesWithTimestamp {
-                                                    data: data.to_vec(),
-                                                    timestamp_in_ms: audio_timestamp_in_ms,
-                                                },
-                                            );
+                                            self.raw_audio_message_tx
+                                                .send(RawAudioMessage::AudioMessage(
+                                                    BytesWithTimestamp {
+                                                        data: data.to_vec(),
+                                                        timestamp_in_ms: audio_timestamp_in_ms,
+                                                    },
+                                                ))
+                                                .unwrap();
 
                                             audio_timestamp_in_ms += self.sample_interval_ms;
                                             frame = frame::Audio::empty();
@@ -410,7 +411,12 @@ impl Demultiplexer {
             }
         }
 
-        self.demultiplexing_done_tx.send(()).unwrap();
+        self.raw_video_message_tx
+            .send(RawVideoMessage::Done)
+            .unwrap();
+        self.raw_audio_message_tx
+            .send(RawAudioMessage::Done)
+            .unwrap();
     }
 }
 
@@ -422,10 +428,10 @@ mod tests {
     #[test]
     fn test_get_bit() {
         let demux = create_test_demux();
-        
+
         // Test getting different bits from a byte
         let test_byte = 0b10101010; // 170 in decimal
-        
+
         assert_eq!(demux.get_bit(test_byte, 0), 0); // LSB
         assert_eq!(demux.get_bit(test_byte, 1), 1);
         assert_eq!(demux.get_bit(test_byte, 2), 0);
@@ -446,45 +452,45 @@ mod tests {
     #[test]
     fn test_convert_avcc_to_annexb_basic() {
         let demux = create_test_demux();
-        
+
         // Test data: 4-byte length (0x00000004) + 4 bytes of NAL data
         let avcc_data = vec![
             0x00, 0x00, 0x00, 0x04, // Length: 4 bytes
             0x67, 0x42, 0x00, 0x1F, // NAL unit data (SPS header example)
         ];
-        
+
         let annexb_data = demux.convert_avcc_to_annexb(&avcc_data);
-        
+
         // Expected: start code (0x00000001) + NAL data
         let expected = vec![
             0x00, 0x00, 0x00, 0x01, // Start code
             0x67, 0x42, 0x00, 0x1F, // NAL unit data
         ];
-        
+
         assert_eq!(annexb_data, expected);
     }
 
     #[test]
     fn test_convert_avcc_to_annexb_multiple_nals() {
         let demux = create_test_demux();
-        
+
         // Test data with two NAL units
         let avcc_data = vec![
             0x00, 0x00, 0x00, 0x02, // Length: 2 bytes
-            0x67, 0x42,             // First NAL unit
+            0x67, 0x42, // First NAL unit
             0x00, 0x00, 0x00, 0x03, // Length: 3 bytes
-            0x68, 0x43, 0x44,       // Second NAL unit
+            0x68, 0x43, 0x44, // Second NAL unit
         ];
-        
+
         let annexb_data = demux.convert_avcc_to_annexb(&avcc_data);
-        
+
         let expected = vec![
             0x00, 0x00, 0x00, 0x01, // Start code for first NAL
-            0x67, 0x42,             // First NAL unit
+            0x67, 0x42, // First NAL unit
             0x00, 0x00, 0x00, 0x01, // Start code for second NAL
-            0x68, 0x43, 0x44,       // Second NAL unit
+            0x68, 0x43, 0x44, // Second NAL unit
         ];
-        
+
         assert_eq!(annexb_data, expected);
     }
 
@@ -499,34 +505,22 @@ mod tests {
     #[test]
     fn test_convert_avcc_to_annexb_invalid_length() {
         let demux = create_test_demux();
-        
+
         // Test data with length longer than available data
         let invalid_data = vec![
             0x00, 0x00, 0x00, 0x10, // Length: 16 bytes (but only 2 bytes follow)
-            0x67, 0x42,             // Only 2 bytes of data
+            0x67, 0x42, // Only 2 bytes of data
         ];
-        
+
         let result = demux.convert_avcc_to_annexb(&invalid_data);
         assert!(result.is_empty()); // Should return empty due to invalid length
     }
 
     // Helper function to create a test demux instance
     fn create_test_demux() -> Demultiplexer {
-        let (tx, _rx) = channel();
-        let raw_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-        let audio_buffer = Arc::new(Mutex::new(ContentQueue::new(44100)));
-        let encoded_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-        let ready_video_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-        
-        Demultiplexer::new(
-            raw_video_buffer,
-            audio_buffer,
-            encoded_video_buffer,
-            ready_video_buffer,
-            tx,
-            "https://example.com/video".to_string(),
-            33, // frame_interval_ms
-            23, // sample_interval_ms
-        )
+        let (audio_tx, _audio_rx) = channel();
+        let (video_tx, _video_rx) = channel();
+
+        Demultiplexer::new(audio_tx, video_tx, "https://example.com/video".to_string())
     }
 }

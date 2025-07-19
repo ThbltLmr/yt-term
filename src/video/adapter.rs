@@ -1,30 +1,19 @@
 use std::io::{self, Write};
 use std::sync::mpsc::Receiver;
+use std::thread;
+use std::time::{Duration, Instant};
 
-use crate::helpers::adapter::Adapter;
-use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
-use crate::{Arc, Mutex};
+
+use super::encoder::EncodedVideoMessage;
 
 pub struct TerminalAdapter {
-    buffer: Arc<Mutex<ContentQueue>>,
-    producer_done_rx: Receiver<()>,
+    producer_rx: Receiver<EncodedVideoMessage>,
 }
 
-impl Adapter for TerminalAdapter {
-    fn new(buffer: Arc<Mutex<ContentQueue>>, producer_done_rx: Receiver<()>) -> Res<Self> {
-        Ok(TerminalAdapter {
-            buffer,
-            producer_done_rx,
-        })
-    }
-
-    fn get_buffer(&self) -> Arc<Mutex<ContentQueue>> {
-        self.buffer.clone()
-    }
-
-    fn is_producer_done(&self) -> bool {
-        self.producer_done_rx.try_recv().is_ok()
+impl TerminalAdapter {
+    pub fn new(producer_rx: Receiver<EncodedVideoMessage>) -> Res<Self> {
+        Ok(TerminalAdapter { producer_rx })
     }
 
     fn process_element(&self, frame: BytesWithTimestamp) -> Res<()> {
@@ -40,6 +29,41 @@ impl Adapter for TerminalAdapter {
         stdout.flush()?;
         Ok(())
     }
+
+    pub fn run(&mut self) -> Res<()> {
+        let mut start_time = Instant::now();
+        let mut started_playing = false;
+
+        loop {
+            match self.producer_rx.try_recv() {
+                Ok(message) => match message {
+                    EncodedVideoMessage::EncodedVideoMessage(frame) => {
+                        if !started_playing {
+                            started_playing = true;
+                            start_time = Instant::now();
+                        }
+
+                        if frame.timestamp_in_ms + 10 < start_time.elapsed().as_millis() as usize {
+                            continue;
+                        }
+
+                        if frame.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
+                            thread::sleep(Duration::from_millis(
+                                (frame.timestamp_in_ms - start_time.elapsed().as_millis() as usize)
+                                    as u64,
+                            ));
+                        }
+
+                        self.process_element(frame).unwrap();
+                    }
+                    EncodedVideoMessage::Done => {
+                        return Ok(());
+                    }
+                },
+                Err(_) => {}
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -50,8 +74,7 @@ mod tests {
     #[test]
     fn video_adapter_creation() {
         let (_tx, rx) = mpsc::channel();
-        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(30)));
-        let display_manager = TerminalAdapter::new(encoded_buffer.clone(), rx);
+        let display_manager = TerminalAdapter::new(rx);
 
         assert!(display_manager.is_ok());
     }

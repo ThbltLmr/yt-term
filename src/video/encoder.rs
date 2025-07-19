@@ -1,31 +1,29 @@
-use crate::helpers::structs::ContentQueue;
+use crate::demux::demultiplexer::RawVideoMessage;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
-use std::{
-    collections::HashMap,
-    sync::{mpsc, Arc, Mutex},
-};
+use std::{collections::HashMap, sync::mpsc};
+
+pub enum EncodedVideoMessage {
+    EncodedVideoMessage(BytesWithTimestamp),
+    Done,
+}
 
 pub struct Encoder {
-    rgb_buffer: Arc<Mutex<ContentQueue>>,
-    encoded_buffer: Arc<Mutex<ContentQueue>>,
     width: usize,
     height: usize,
     term_width: u16,
     term_height: u16,
-    streaming_done_rx: mpsc::Receiver<()>,
-    encoding_done_tx: mpsc::Sender<()>,
+    producer_rx: mpsc::Receiver<RawVideoMessage>,
+    producer_tx: mpsc::Sender<EncodedVideoMessage>,
 }
 
 impl Encoder {
     pub fn new(
-        rgb_buffer: Arc<Mutex<ContentQueue>>,
-        encoded_buffer: Arc<Mutex<ContentQueue>>,
         width: usize,
         height: usize,
-        streaming_done_rx: mpsc::Receiver<()>,
-        encoding_done_tx: mpsc::Sender<()>,
+        producer_rx: mpsc::Receiver<RawVideoMessage>,
+        producer_tx: mpsc::Sender<EncodedVideoMessage>,
     ) -> Res<Self> {
         let (term_width, term_height) = Self::get_terminal_size().unwrap_or((1280, 720));
 
@@ -38,21 +36,19 @@ impl Encoder {
         }
 
         Ok(Encoder {
-            rgb_buffer,
-            encoded_buffer,
             width,
             height,
             term_width,
             term_height,
-            streaming_done_rx,
-            encoding_done_tx,
+            producer_rx,
+            producer_tx,
         })
     }
 
     // Convert a frame to the Kitty Graphics Protocol format
     fn encode_frame(
         &self,
-        encoded_control_data: Vec<u8>,
+        encoded_control_data: &Vec<u8>,
         frame: BytesWithTimestamp,
     ) -> BytesWithTimestamp {
         // Base64 encode the frame data
@@ -75,31 +71,34 @@ impl Encoder {
     }
 
     pub fn encode(&mut self) -> Res<()> {
+        let x_offset = (self.term_width as usize - self.width) / 2;
+        let y_offset = (self.term_height as usize - self.height) / 2;
+
+        let encoded_control_data = self.encode_control_data(HashMap::from([
+            ("f".into(), "24".into()),
+            ("s".into(), format!("{}", self.width)),
+            ("v".into(), format!("{}", self.height)),
+            ("t".into(), "d".into()),
+            ("a".into(), "T".into()),
+            ("X".into(), format!("{}", x_offset)),
+            ("Y".into(), format!("{}", y_offset)),
+        ]));
+
         loop {
-            let mut rgb_buffer = self.rgb_buffer.lock().unwrap();
-            let x_offset = (self.term_width as usize - self.width) / 2;
-            let y_offset = (self.term_height as usize - self.height) / 2;
+            match self.producer_rx.try_recv() {
+                Ok(message) => match message {
+                    RawVideoMessage::VideoMessage(frame) => {
+                        let encoded_frame = self.encode_frame(&encoded_control_data, frame);
 
-            let encoded_control_data = self.encode_control_data(HashMap::from([
-                ("f".into(), "24".into()),
-                ("s".into(), format!("{}", self.width)),
-                ("v".into(), format!("{}", self.height)),
-                ("t".into(), "d".into()),
-                ("a".into(), "T".into()),
-                ("X".into(), format!("{}", x_offset)),
-                ("Y".into(), format!("{}", y_offset)),
-            ]));
-
-            let frame = rgb_buffer.get_el();
-
-            if let Some(frame) = frame {
-                let encoded_frame = self.encode_frame(encoded_control_data, frame);
-                let mut encoded_buffer = self.encoded_buffer.lock().unwrap();
-
-                encoded_buffer.push_el(encoded_frame);
-            } else if self.streaming_done_rx.try_recv().is_ok() {
-                self.encoding_done_tx.send(()).unwrap();
-                return Ok(());
+                        self.producer_tx
+                            .send(EncodedVideoMessage::EncodedVideoMessage(encoded_frame))
+                            .unwrap();
+                    }
+                    RawVideoMessage::Done => {
+                        self.producer_tx.send(EncodedVideoMessage::Done).unwrap();
+                    }
+                },
+                _ => {}
             }
         }
     }
@@ -134,24 +133,14 @@ impl Encoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::mpsc;
 
     #[test]
     fn test_new_encoder() {
-        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
-        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
+        let (_streaming_done_tx, producer_rx) = mpsc::channel();
+        let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(
-            rgb_buffer.clone(),
-            encoded_buffer.clone(),
-            640,
-            480,
-            streaming_done_rx,
-            encoding_done_tx,
-        )
-        .unwrap();
+        let encoder = Encoder::new(640, 480, producer_rx, producer_tx).unwrap();
 
         assert_eq!(encoder.width, 640);
         assert_eq!(encoder.height, 480);
@@ -159,15 +148,7 @@ mod tests {
 
     #[test]
     fn test_encode_control_data() {
-        let encoder = Encoder::new(
-            Arc::new(Mutex::new(ContentQueue::new(1))),
-            Arc::new(Mutex::new(ContentQueue::new(1))),
-            640,
-            480,
-            mpsc::channel().1,
-            mpsc::channel().0,
-        )
-        .unwrap();
+        let encoder = Encoder::new(640, 480, mpsc::channel().1, mpsc::channel().0).unwrap();
 
         let control_data = HashMap::from([
             ("f".into(), "24".into()),
@@ -190,20 +171,10 @@ mod tests {
 
     #[test]
     fn test_get_terminal_size() {
-        let rgb_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let encoded_buffer = Arc::new(Mutex::new(ContentQueue::new(1)));
-        let (_streaming_done_tx, streaming_done_rx) = mpsc::channel();
-        let (encoding_done_tx, _encoding_done_rx) = mpsc::channel();
+        let (_streaming_done_tx, producer_rx) = mpsc::channel();
+        let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(
-            rgb_buffer.clone(),
-            encoded_buffer.clone(),
-            640,
-            480,
-            streaming_done_rx,
-            encoding_done_tx,
-        )
-        .unwrap();
+        let encoder = Encoder::new(640, 480, producer_rx, producer_tx).unwrap();
 
         assert!(
             encoder.term_width > 0 && encoder.term_height > 0,

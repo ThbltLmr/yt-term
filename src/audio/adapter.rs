@@ -3,20 +3,19 @@ use pulse::stream::Direction;
 use simple_pulse::Simple;
 
 use std::sync::mpsc::Receiver;
+use std::thread;
+use std::time::{Duration, Instant};
 
-use crate::helpers::adapter::Adapter;
-use crate::helpers::structs::ContentQueue;
+use crate::demux::demultiplexer::RawAudioMessage;
 use crate::helpers::types::{BytesWithTimestamp, Res};
-use crate::{Arc, Mutex};
 
 pub struct AudioAdapter {
     simple: Simple,
-    buffer: Arc<Mutex<ContentQueue>>,
-    producer_done_rx: Receiver<()>,
+    producer_rx: Receiver<RawAudioMessage>,
 }
 
-impl Adapter for AudioAdapter {
-    fn new(buffer: Arc<Mutex<ContentQueue>>, producer_done_rx: Receiver<()>) -> Res<Self> {
+impl AudioAdapter {
+    pub fn new(producer_rx: Receiver<RawAudioMessage>) -> Res<Self> {
         let spec = Spec {
             format: Format::F32le,
             channels: 2,
@@ -35,14 +34,9 @@ impl Adapter for AudioAdapter {
         )?;
 
         Ok(AudioAdapter {
-            buffer,
-            producer_done_rx,
+            producer_rx,
             simple,
         })
-    }
-
-    fn get_buffer(&self) -> Arc<Mutex<ContentQueue>> {
-        self.buffer.clone()
     }
 
     fn process_element(&self, sample: BytesWithTimestamp) -> Res<()> {
@@ -51,12 +45,37 @@ impl Adapter for AudioAdapter {
         Ok(())
     }
 
-    fn is_producer_done(&self) -> bool {
-        self.producer_done_rx.try_recv().is_ok()
-    }
-}
+    pub fn run(&mut self) -> Res<()> {
+        let mut start_time = Instant::now();
+        let mut started_playing = false;
 
-impl AudioAdapter {
+        loop {
+            match self.producer_rx.try_recv() {
+                Ok(message) => match message {
+                    RawAudioMessage::AudioMessage(sample) => {
+                        if !started_playing {
+                            started_playing = true;
+                            start_time = Instant::now();
+                        }
+
+                        if sample.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
+                            thread::sleep(Duration::from_millis(
+                                (sample.timestamp_in_ms - start_time.elapsed().as_millis() as usize)
+                                    as u64,
+                            ));
+                        }
+
+                        self.process_element(sample).unwrap();
+                    }
+                    RawAudioMessage::Done => {
+                        return Ok(());
+                    }
+                },
+                Err(_) => {}
+            }
+        }
+    }
+
     fn planar_to_interleaved(&self, planar_data: &[u8]) -> Vec<u8> {
         let samples_per_channel = planar_data.len() / (4 * 2);
         let mut left_channel = Vec::with_capacity(samples_per_channel);
