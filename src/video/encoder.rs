@@ -2,7 +2,7 @@ use crate::demux::demultiplexer::RawVideoMessage;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
-use std::{collections::HashMap, sync::mpsc};
+use std::{collections::HashMap, sync::mpsc, time::Duration};
 
 pub enum EncodedVideoMessage {
     EncodedVideoMessage(BytesWithTimestamp),
@@ -85,7 +85,7 @@ impl Encoder {
         ]));
 
         loop {
-            match self.producer_rx.try_recv() {
+            match self.producer_rx.recv_timeout(Duration::from_millis(16)) {
                 Ok(message) => match message {
                     RawVideoMessage::VideoMessage(frame) => {
                         let encoded_frame = self.encode_frame(&encoded_control_data, frame);
@@ -96,9 +96,11 @@ impl Encoder {
                     }
                     RawVideoMessage::Done => {
                         self.producer_tx.send(EncodedVideoMessage::Done).unwrap();
+                        return Ok(());
                     }
                 },
-                _ => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(()),
             }
         }
     }

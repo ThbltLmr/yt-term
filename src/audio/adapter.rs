@@ -2,7 +2,7 @@ use pulse::sample::{Format, Spec};
 use pulse::stream::Direction;
 use simple_pulse::Simple;
 
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -50,7 +50,7 @@ impl AudioAdapter {
         let mut started_playing = false;
 
         loop {
-            match self.producer_rx.try_recv() {
+            match self.producer_rx.recv_timeout(Duration::from_millis(16)) {
                 Ok(message) => match message {
                     RawAudioMessage::AudioMessage(sample) => {
                         if !started_playing {
@@ -71,7 +71,8 @@ impl AudioAdapter {
                         return Ok(());
                     }
                 },
-                Err(_) => {}
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => return Ok(()),
             }
         }
     }

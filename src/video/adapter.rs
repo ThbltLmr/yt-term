@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -35,7 +35,7 @@ impl TerminalAdapter {
         let mut started_playing = false;
 
         loop {
-            match self.producer_rx.try_recv() {
+            match self.producer_rx.recv_timeout(Duration::from_millis(16)) {
                 Ok(message) => match message {
                     EncodedVideoMessage::EncodedVideoMessage(frame) => {
                         if !started_playing {
@@ -60,7 +60,8 @@ impl TerminalAdapter {
                         return Ok(());
                     }
                 },
-                Err(_) => {}
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => return Ok(()),
             }
         }
     }
