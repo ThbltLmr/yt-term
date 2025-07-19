@@ -1,7 +1,6 @@
 mod helpers {
     pub mod adapter;
     pub mod args;
-    pub mod logger;
     pub mod structs;
     pub mod types;
 }
@@ -83,20 +82,6 @@ fn main() {
 
     thread::spawn(move || {
         video_adapter.run().expect("Failed to start video display");
-    });
-
-    let mut logger = helpers::logger::Logger::new(
-        raw_video_buffer.clone(),
-        encoded_video_buffer.clone(),
-        audio_buffer.clone(),
-        ready_video_buffer.clone(),
-        ready_audio_buffer.clone(),
-        playing_rx,
-    )
-    .expect("Failed to create logger");
-
-    thread::spawn(move || {
-        logger.log().expect("Failed to start logging");
     });
 
     loop {
