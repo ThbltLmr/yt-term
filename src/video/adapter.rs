@@ -43,6 +43,10 @@ impl TerminalAdapter {
                             start_time = Instant::now();
                         }
 
+                        if frame.timestamp_in_ms + 10 < start_time.elapsed().as_millis() as usize {
+                            continue;
+                        }
+
                         if frame.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
                             thread::sleep(Duration::from_millis(
                                 (frame.timestamp_in_ms - start_time.elapsed().as_millis() as usize)
@@ -52,7 +56,9 @@ impl TerminalAdapter {
 
                         self.process_element(frame).unwrap();
                     }
-                    EncodedVideoMessage::Done => {}
+                    EncodedVideoMessage::Done => {
+                        return Ok(());
+                    }
                 },
                 Err(_) => {}
             }

@@ -67,7 +67,9 @@ impl AudioAdapter {
 
                         self.process_element(sample).unwrap();
                     }
-                    RawAudioMessage::Done => {}
+                    RawAudioMessage::Done => {
+                        return Ok(());
+                    }
                 },
                 Err(_) => {}
             }
