@@ -18,7 +18,6 @@ pub enum RawAudioMessage {
 
 pub enum RawVideoMessage {
     VideoMessage(BytesWithTimestamp),
-    FramesPerSecond(usize),
     Done,
 }
 
@@ -38,7 +37,6 @@ impl Demultiplexer {
         raw_video_message_tx: Sender<RawVideoMessage>,
         raw_audio_message_tx: Sender<RawAudioMessage>,
         url: String,
-        sample_interval_ms: usize,
     ) -> Self {
         /*
          * This is a very hacky fix to initiate an AVContext.
@@ -71,6 +69,11 @@ impl Demultiplexer {
 
         let audio_decoder = audio_context.decoder().audio().unwrap();
 
+        let audio_bytes_per_second = 44100 * 2 * 4;
+        let audio_sample_size = 8192;
+
+        let samples_per_second = audio_bytes_per_second / audio_sample_size;
+        let sample_interval_ms = 1000 / samples_per_second;
         Self {
             raw_video_message_tx,
             raw_audio_message_tx,
@@ -521,11 +524,6 @@ mod tests {
         let (audio_tx, _audio_rx) = channel();
         let (video_tx, _video_rx) = channel();
 
-        Demultiplexer::new(
-            audio_tx,
-            video_tx,
-            "https://example.com/video".to_string(),
-            23, // sample_interval_ms
-        )
+        Demultiplexer::new(audio_tx, video_tx, "https://example.com/video".to_string())
     }
 }

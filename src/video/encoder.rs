@@ -1,5 +1,4 @@
 use crate::demux::demultiplexer::RawVideoMessage;
-use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
@@ -7,12 +6,10 @@ use std::{collections::HashMap, sync::mpsc};
 
 pub enum EncodedVideoMessage {
     EncodedVideoMessage(BytesWithTimestamp),
-    FramesPerSecond(usize),
     Done,
 }
 
 pub struct Encoder {
-    rgb_buffer: ContentQueue,
     width: usize,
     height: usize,
     term_width: u16,
@@ -39,7 +36,6 @@ impl Encoder {
         }
 
         Ok(Encoder {
-            rgb_buffer: ContentQueue::new(30),
             width,
             height,
             term_width,

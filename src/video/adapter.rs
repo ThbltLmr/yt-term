@@ -1,21 +1,17 @@
 use std::io::{self, Write};
 use std::sync::mpsc::Receiver;
 
-use crate::helpers::adapter::Adapter;
-use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 
+use super::encoder::EncodedVideoMessage;
+
 pub struct TerminalAdapter {
-    buffer: ContentQueue,
-    producer_rx: Receiver<()>,
+    producer_rx: Receiver<EncodedVideoMessage>,
 }
 
-impl Adapter for TerminalAdapter {
-    fn new(buffer: ContentQueue, producer_rx: Receiver<()>) -> Res<Self> {
-        Ok(TerminalAdapter {
-            buffer,
-            producer_rx,
-        })
+impl TerminalAdapter {
+    fn new(producer_rx: Receiver<EncodedVideoMessage>) -> Res<Self> {
+        Ok(TerminalAdapter { producer_rx })
     }
 
     fn get_buffer(&mut self) -> &mut ContentQueue {

@@ -3,21 +3,19 @@ use pulse::stream::Direction;
 use simple_pulse::Simple;
 
 use std::sync::mpsc::Receiver;
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::demux::demultiplexer::RawAudioMessage;
-use crate::helpers::adapter::Adapter;
-use crate::helpers::structs::ContentQueue;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 
 pub struct AudioAdapter {
     simple: Simple,
-    buffer: ContentQueue,
     producer_rx: Receiver<RawAudioMessage>,
 }
 
-impl Adapter<RawAudioMessage> for AudioAdapter {
-    fn new(el_per_second: usize, producer_rx: Receiver<RawAudioMessage>) -> Res<Self> {
+impl AudioAdapter {
+    fn newp(producer_rx: Receiver<RawAudioMessage>) -> Res<Self> {
         let spec = Spec {
             format: Format::F32le,
             channels: 2,
@@ -35,17 +33,10 @@ impl Adapter<RawAudioMessage> for AudioAdapter {
             None,
         )?;
 
-        let buffer = ContentQueue::new(el_per_second);
-
         Ok(AudioAdapter {
-            buffer,
             producer_rx,
             simple,
         })
-    }
-
-    fn get_buffer(&mut self) -> &mut ContentQueue {
-        &mut self.buffer
     }
 
     fn process_element(&self, sample: BytesWithTimestamp) -> Res<()> {
@@ -54,47 +45,33 @@ impl Adapter<RawAudioMessage> for AudioAdapter {
         Ok(())
     }
 
-    fn is_producer_done(&self) -> bool {
-        self.producer_rx.try_recv().is_ok()
-    }
-
     fn run(&mut self) -> Res<()> {
         let mut start_time: Instant;
         let mut started_playing = false;
 
         loop {
-            if self.is_buffer_empty() {
-                if self.is_producer_done() {
-                    return Ok(());
-                }
-            } else if let Some(element) = self.get_buffer_element() {
-                if !started_playing {
-                    start_time = Instant::now();
-                    started_playing = true;
-                }
+            match self.producer_rx.try_recv() {
+                Ok(message) => match message {
+                    RawAudioMessage::AudioMessage(sample) => {
+                        if !started_playing {
+                            started_playing = true;
+                            start_time = Instant::now();
+                        }
+                        if sample.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
+                            thread::sleep(Duration::from_millis(
+                                sample.timestamp_in_ms - start_time.elapsed().as_millis(),
+                            ));
+                        }
 
-                while element.timestamp_in_ms > start_time.elapsed().as_millis() as usize {
-                    thread::sleep(Duration::from_millis(1));
-                }
-
-                if element.timestamp_in_ms + 5 <= start_time.elapsed().as_millis() as usize {
-                    continue;
-                }
-
-                assert!(
-                    element
-                        .timestamp_in_ms
-                        .abs_diff(start_time.elapsed().as_millis() as usize)
-                        < 5
-                );
-
-                self.process_element(element)?;
+                        self.process_element(sample);
+                    }
+                    RawAudioMessage::Done => {}
+                },
+                Err(_) => {}
             }
         }
     }
-}
 
-impl AudioAdapter {
     fn planar_to_interleaved(&self, planar_data: &[u8]) -> Vec<u8> {
         let samples_per_channel = planar_data.len() / (4 * 2);
         let mut left_channel = Vec::with_capacity(samples_per_channel);
