@@ -39,7 +39,7 @@ fn main() {
     let (demultiplexer_video_tx, demultiplexer_video_rx) = channel::<RawVideoMessage>();
     let (video_encoding_tx, video_encoding_rx) = channel::<EncodedVideoMessage>();
 
-    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+    let screen_guard = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let Args { url } = parse_args();
 
@@ -74,4 +74,6 @@ fn main() {
     let _ = encode_handle.join();
     let _ = audio_handle.join();
     let _ = video_handle.join();
+
+    drop(screen_guard);
 }
