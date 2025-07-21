@@ -27,7 +27,10 @@ use helpers::{
     args::{parse_args, Args},
     structs::ScreenGuard,
 };
-use video::encoder::{EncodedVideoMessage, Encoder};
+use video::{
+    adapter::TerminalAdapter,
+    encoder::{EncodedVideoMessage, Encoder},
+};
 
 fn main() {
     ffmpeg_next::init().unwrap();
@@ -36,18 +39,18 @@ fn main() {
     let (demultiplexer_video_tx, demultiplexer_video_rx) = channel::<RawVideoMessage>();
     let (video_encoding_tx, video_encoding_rx) = channel::<EncodedVideoMessage>();
 
-    let _ = ScreenGuard::new().expect("Failed to initialize screen guard");
+    let screen_guard = ScreenGuard::new().expect("Failed to initialize screen guard");
 
-    let Args { url, width, height } = parse_args();
+    let Args { url } = parse_args();
 
     let mut demux = Demultiplexer::new(demultiplexer_video_tx, demultiplexer_audio_tx, url);
 
     let demux_handle = thread::spawn(move || {
-        demux.demux();
+        demux.demux().expect("Failed to start demultiplexer");
     });
 
-    let mut encoder = Encoder::new(width, height, demultiplexer_video_rx, video_encoding_tx)
-        .expect("Failed to create encoder");
+    let mut encoder =
+        Encoder::new(demultiplexer_video_rx, video_encoding_tx).expect("Failed to create encoder");
 
     let encode_handle = thread::spawn(move || {
         encoder.encode().expect("Failed to start encoding");
@@ -60,8 +63,8 @@ fn main() {
         audio_adapter.run().expect("Failed to start audio playback");
     });
 
-    let mut video_adapter = video::adapter::TerminalAdapter::new(video_encoding_rx)
-        .expect("Failed to create video adapter");
+    let mut video_adapter =
+        TerminalAdapter::new(video_encoding_rx).expect("Failed to create video adapter");
 
     let video_handle = thread::spawn(move || {
         video_adapter.run().expect("Failed to start video display");
@@ -71,4 +74,6 @@ fn main() {
     let _ = encode_handle.join();
     let _ = audio_handle.join();
     let _ = video_handle.join();
+
+    drop(screen_guard);
 }

@@ -20,8 +20,6 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new(
-        width: usize,
-        height: usize,
         producer_rx: mpsc::Receiver<RawVideoMessage>,
         producer_tx: mpsc::Sender<EncodedVideoMessage>,
     ) -> Res<Self> {
@@ -31,13 +29,9 @@ impl Encoder {
             return Err("Invalid terminal size".into());
         }
 
-        if width > term_width as usize || height > term_height as usize {
-            return Err("Video dimensions exceed terminal size".into());
-        }
-
         Ok(Encoder {
-            width,
-            height,
+            width: 640,
+            height: 360,
             term_width,
             term_height,
             producer_rx,
@@ -142,20 +136,20 @@ mod tests {
         let (_streaming_done_tx, producer_rx) = mpsc::channel();
         let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(640, 480, producer_rx, producer_tx).unwrap();
+        let encoder = Encoder::new(producer_rx, producer_tx).unwrap();
 
         assert_eq!(encoder.width, 640);
-        assert_eq!(encoder.height, 480);
+        assert_eq!(encoder.height, 360);
     }
 
     #[test]
     fn test_encode_control_data() {
-        let encoder = Encoder::new(640, 480, mpsc::channel().1, mpsc::channel().0).unwrap();
+        let encoder = Encoder::new(mpsc::channel().1, mpsc::channel().0).unwrap();
 
         let control_data = HashMap::from([
             ("f".into(), "24".into()),
             ("s".into(), "640".into()),
-            ("v".into(), "480".into()),
+            ("v".into(), "360".into()),
         ]);
 
         let encoded_data = encoder.encode_control_data(control_data);
@@ -168,7 +162,7 @@ mod tests {
             .contains("s=640"));
         assert!(String::from_utf8(encoded_data.clone())
             .unwrap()
-            .contains("v=480"));
+            .contains("v=360"));
     }
 
     #[test]
@@ -176,7 +170,7 @@ mod tests {
         let (_streaming_done_tx, producer_rx) = mpsc::channel();
         let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(640, 480, producer_rx, producer_tx).unwrap();
+        let encoder = Encoder::new(producer_rx, producer_tx).unwrap();
 
         assert!(
             encoder.term_width > 0 && encoder.term_height > 0,

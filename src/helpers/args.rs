@@ -9,12 +9,6 @@ pub struct Args {
         default_value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     )]
     pub url: String,
-
-    #[clap(long, default_value = "640")]
-    pub width: usize,
-
-    #[clap(long, default_value = "360")]
-    pub height: usize,
 }
 
 pub fn parse_args() -> Args {
