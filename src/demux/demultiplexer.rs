@@ -7,7 +7,7 @@ use std::usize;
 use crate::demux::get_moov_box::{get_moov_box, FTYPBox, MOOVBox, Streams};
 
 use crate::demux::get_sample_map::get_sample_map;
-use crate::helpers::types::BytesWithTimestamp;
+use crate::helpers::types::{BytesWithTimestamp, Res};
 
 use super::get_sample_map::SampleMap;
 
@@ -133,7 +133,7 @@ impl Demultiplexer {
         result
     }
 
-    pub fn demux(&mut self) {
+    pub fn demux(&mut self) -> Res<()> {
         /*
          * This starts the yt-dlp program for a given url, looking for format 18
          * Format 18 corresponds to a mp4 file with audio and video tracks
@@ -417,6 +417,7 @@ impl Demultiplexer {
         self.raw_audio_message_tx
             .send(RawAudioMessage::Done)
             .unwrap();
+        Ok(())
     }
 }
 
