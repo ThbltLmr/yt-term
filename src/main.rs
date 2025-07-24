@@ -24,7 +24,7 @@ use std::{sync::mpsc::channel, thread};
 use audio::adapter::AudioAdapter;
 use demux::demultiplexer::{Demultiplexer, RawAudioMessage, RawVideoMessage};
 use helpers::{
-    args::{parse_args, Args},
+    args::parse_args,
     structs::ScreenGuard,
 };
 use video::{
