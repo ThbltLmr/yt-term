@@ -1,10 +1,8 @@
 # yt-term
 Real time video streaming terminal player based on [yt-dlp](https://github.com/yt-dlp/yt-dlp), [ffmpeg](https://www.ffmpeg.org), and the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/).
 
-You can find a list of supported sites in the [yt-dlp documentation](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
-
 ## Disclaimer
-This is a hobby project, meant to be a proof of concept and to try out the Kitty graphics protocol. While I am sure it can be improved in many ways, I am not going to maintain it. Feel free to fork / copy it if you want to use it or improve it.
+This is a hobby project, meant to try out the Kitty graphics protocol. This is not meant to be an actual YouTube client. In fact, it will probably not even for work some videos that have non-supported formats.
 
 ## Dependencies
 This program requires:
@@ -32,7 +30,8 @@ You can run the program with the following command:
 ```
 
 ### Options
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-u`, `--url` | The URL of the video to play | https://www.youtube.com/watch?v=dQw4w9WgXcQ |
+| Option | Description |
+|--------|-------------|
+| `-u`, `--url` | The URL of the video to play |
+| `-s`, `--search` | A search query; the tool will play the first result for that query on YouTube |
 
