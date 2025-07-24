@@ -41,9 +41,17 @@ fn main() {
 
     let screen_guard = ScreenGuard::new().expect("Failed to initialize screen guard");
 
-    let Args { url } = parse_args();
+    let args = parse_args();
+    
+    let input = if let Some(url) = args.url {
+        url
+    } else if let Some(search) = args.search {
+        format!("ytsearch:{}", search)
+    } else {
+        unreachable!() // This should never happen due to validation in parse_args
+    };
 
-    let mut demux = Demultiplexer::new(demultiplexer_video_tx, demultiplexer_audio_tx, url);
+    let mut demux = Demultiplexer::new(demultiplexer_video_tx, demultiplexer_audio_tx, input);
 
     let demux_handle = thread::spawn(move || {
         demux.demux().expect("Failed to start demultiplexer");
