@@ -23,10 +23,7 @@ use std::{sync::mpsc::channel, thread};
 
 use audio::adapter::AudioAdapter;
 use demux::demultiplexer::{Demultiplexer, RawAudioMessage, RawVideoMessage};
-use helpers::{
-    args::parse_args,
-    structs::ScreenGuard,
-};
+use helpers::{args::parse_args, structs::ScreenGuard};
 use video::{
     adapter::TerminalAdapter,
     encoder::{EncodedVideoMessage, Encoder},
@@ -42,13 +39,13 @@ fn main() {
     let screen_guard = ScreenGuard::new().expect("Failed to initialize screen guard");
 
     let args = parse_args();
-    
+
     let input = if let Some(url) = args.url {
         url
     } else if let Some(search) = args.search {
         format!("ytsearch:{}", search)
     } else {
-        unreachable!() // This should never happen due to validation in parse_args
+        unreachable!()
     };
 
     let mut demux = Demultiplexer::new(demultiplexer_video_tx, demultiplexer_audio_tx, input);
