@@ -1,7 +1,8 @@
-use pulse::sample::{Format, Spec};
-use pulse::stream::Direction;
-use simple_pulse::Simple;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{SampleRate, StreamConfig};
 
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -10,42 +11,57 @@ use crate::demux::demultiplexer::RawAudioMessage;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 
 pub struct AudioAdapter {
-    simple: Simple,
     producer_rx: Receiver<RawAudioMessage>,
+    audio_buffer: Arc<Mutex<VecDeque<f32>>>,
 }
 
 impl AudioAdapter {
     pub fn new(producer_rx: Receiver<RawAudioMessage>) -> Res<Self> {
-        let spec = Spec {
-            format: Format::F32le,
-            channels: 2,
-            rate: 44100,
-        };
-
-        let simple = Simple::new(
-            None,
-            "AudioAdapter",
-            Direction::Playback,
-            None,
-            "Audio Playback",
-            &spec,
-            None,
-            None,
-        )?;
+        let audio_buffer = Arc::new(Mutex::new(VecDeque::new()));
 
         Ok(AudioAdapter {
             producer_rx,
-            simple,
+            audio_buffer,
         })
     }
 
     fn process_element(&self, sample: BytesWithTimestamp) -> Res<()> {
-        self.simple
-            .write(&self.planar_to_interleaved(&sample.data))?;
+        let interleaved_data = self.planar_to_interleaved(&sample.data);
+        let float_samples: Vec<f32> = interleaved_data
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        
+        let mut buffer = self.audio_buffer.lock().unwrap();
+        buffer.extend(float_samples);
         Ok(())
     }
 
     pub fn run(&mut self) -> Res<()> {
+        let host = cpal::default_host();
+        let device = host.default_output_device().ok_or("No output device available")?;
+        
+        let config = StreamConfig {
+            channels: 2,
+            sample_rate: SampleRate(44100),
+            buffer_size: cpal::BufferSize::Default,
+        };
+
+        let buffer_clone = Arc::clone(&self.audio_buffer);
+        let stream = device.build_output_stream(
+            &config,
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                let mut buffer = buffer_clone.lock().unwrap();
+                for sample in data.iter_mut() {
+                    *sample = buffer.pop_front().unwrap_or(0.0);
+                }
+            },
+            |err| eprintln!("Audio stream error: {}", err),
+            None,
+        )?;
+        
+        stream.play()?;
+        
         let mut start_time = Instant::now();
         let mut started_playing = false;
 

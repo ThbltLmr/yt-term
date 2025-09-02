@@ -46,7 +46,7 @@ impl Demultiplexer {
          * assuming that all MP4 files from YouTube will have the same properties.
          */
         // TODO: Write unsafe block to create AVContext from moov data
-        let input = ffmpeg::format::input("/home/Thibault/Downloads/sample.mp4").unwrap();
+        let input = ffmpeg::format::input("/Users/thibaultlemery/Downloads/sample.mp4").unwrap();
         let video_context = ffmpeg::codec::context::Context::from_parameters(
             input
                 .streams()
@@ -74,6 +74,7 @@ impl Demultiplexer {
 
         let samples_per_second = audio_bytes_per_second / audio_sample_size;
         let sample_interval_ms = 1000 / samples_per_second;
+
         Self {
             raw_video_message_tx,
             raw_audio_message_tx,
@@ -172,7 +173,9 @@ impl Demultiplexer {
 
         loop {
             match yt_dlp_stdout.read(&mut buffer) {
-                Ok(0) => break,
+                Ok(0) => {
+                    break;
+                }
                 Ok(bytes_read) => {
                     accumulated_data.extend_from_slice(&buffer[..bytes_read]);
 
