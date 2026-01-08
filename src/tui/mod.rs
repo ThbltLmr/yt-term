@@ -3,35 +3,45 @@ pub mod search;
 pub mod terminal;
 pub mod ui;
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::time::Duration;
 
+use crate::PlaybackHandle;
 use app::{App, AppMode};
 use search::search_youtube;
 
-pub fn run<F>(start_playback: F) -> Result<(), Box<dyn std::error::Error>>
-where
-    F: Fn(&str) -> Result<(), Box<dyn std::error::Error>>,
-{
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = terminal::init()?;
     let mut app = App::new();
+    let mut playback: Option<PlaybackHandle> = None;
 
-    let result = run_app(&mut terminal, &mut app, start_playback);
+    let result = run_app(&mut terminal, &mut app, &mut playback);
+
+    // Clean up any running playback
+    if let Some(handle) = playback {
+        handle.cancel();
+        handle.join();
+    }
 
     terminal::restore()?;
     result
 }
 
-fn run_app<F>(
+fn run_app(
     terminal: &mut terminal::Tui,
     app: &mut App,
-    start_playback: F,
-) -> Result<(), Box<dyn std::error::Error>>
-where
-    F: Fn(&str) -> Result<(), Box<dyn std::error::Error>>,
-{
+    playback: &mut Option<PlaybackHandle>,
+) -> Result<(), Box<dyn std::error::Error>> {
     while !app.should_quit {
         terminal.draw(|f| ui::render(f, app))?;
+
+        // Check if playback finished naturally
+        if let Some(ref handle) = playback {
+            if handle.is_finished() {
+                playback.take().unwrap().join();
+                app.mode = AppMode::Results;
+            }
+        }
 
         if event::poll(Duration::from_millis(16))? {
             if let Event::Key(key) = event::read()? {
@@ -39,16 +49,34 @@ where
                     continue;
                 }
 
+                // Handle Ctrl+C globally
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    if matches!(app.mode, AppMode::Playing) {
+                        stop_playback(app, playback);
+                    } else {
+                        app.should_quit = true;
+                    }
+                    continue;
+                }
+
                 match &app.mode {
                     AppMode::Search => handle_search_mode(app, key.code),
-                    AppMode::Results => handle_results_mode(app, key.code, &start_playback)?,
-                    AppMode::Playing => handle_playing_mode(app, key.code),
+                    AppMode::Results => handle_results_mode(app, key.code, playback),
+                    AppMode::Playing => handle_playing_mode(app, key.code, playback),
                 }
             }
         }
     }
 
     Ok(())
+}
+
+fn stop_playback(app: &mut App, playback: &mut Option<PlaybackHandle>) {
+    if let Some(handle) = playback.take() {
+        handle.cancel();
+        handle.join();
+    }
+    app.mode = AppMode::Results;
 }
 
 fn handle_search_mode(app: &mut App, key: KeyCode) {
@@ -80,14 +108,7 @@ fn handle_search_mode(app: &mut App, key: KeyCode) {
     }
 }
 
-fn handle_results_mode<F>(
-    app: &mut App,
-    key: KeyCode,
-    start_playback: &F,
-) -> Result<(), Box<dyn std::error::Error>>
-where
-    F: Fn(&str) -> Result<(), Box<dyn std::error::Error>>,
-{
+fn handle_results_mode(app: &mut App, key: KeyCode, playback: &mut Option<PlaybackHandle>) {
     match key {
         KeyCode::Char('q') => {
             app.should_quit = true;
@@ -107,20 +128,18 @@ where
                 app.playing_url = Some(result.url.clone());
                 app.mode = AppMode::Playing;
 
-                start_playback(&result.url)?;
-
-                app.mode = AppMode::Results;
+                // Start playback asynchronously
+                *playback = Some(crate::start_playback_async(&result.url, false));
             }
         }
         _ => {}
     }
-    Ok(())
 }
 
-fn handle_playing_mode(app: &mut App, key: KeyCode) {
+fn handle_playing_mode(app: &mut App, key: KeyCode, playback: &mut Option<PlaybackHandle>) {
     match key {
         KeyCode::Esc | KeyCode::Char('q') => {
-            app.mode = AppMode::Results;
+            stop_playback(app, playback);
         }
         _ => {}
     }
