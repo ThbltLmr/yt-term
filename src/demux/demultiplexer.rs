@@ -4,6 +4,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
 use std::usize;
 
+use crate::demux::codec_context;
 use crate::demux::get_moov_box::{get_moov_box, FTYPBox, MOOVBox, Streams};
 
 use crate::demux::get_sample_map::get_sample_map;
@@ -25,8 +26,8 @@ pub struct Demultiplexer {
     pub url: String,
     pub raw_video_message_tx: Sender<RawVideoMessage>,
     pub raw_audio_message_tx: Sender<RawAudioMessage>,
-    pub video_decoder: ffmpeg::decoder::Video,
-    pub audio_decoder: ffmpeg::decoder::Audio,
+    pub video_decoder: Option<ffmpeg::decoder::Video>,
+    pub audio_decoder: Option<ffmpeg::decoder::Audio>,
     pub nal_length_size: u8,
     frame_interval_ms: Option<usize>,
     sample_interval_ms: usize,
@@ -38,37 +39,6 @@ impl Demultiplexer {
         raw_audio_message_tx: Sender<RawAudioMessage>,
         url: String,
     ) -> Self {
-        /*
-         * This is a very hacky fix to initiate an AVContext.
-         * The simple-ffmpeg does not provide a safe way to instantiate a Context struct from its
-         * properties. It only provides a way to instantiate a context from an input file.
-         * Here, we use a minimal sample file (1 second video) downloaded from YouTube as an example of AVContext. We are
-         * assuming that all MP4 files from YouTube will have the same properties.
-         */
-        // TODO: Write unsafe block to create AVContext from moov data
-        let input = ffmpeg::format::input("/Users/thibaultlemery/Downloads/sample.mp4").unwrap();
-        let video_context = ffmpeg::codec::context::Context::from_parameters(
-            input
-                .streams()
-                .best(ffmpeg_next::media::Type::Video)
-                .unwrap()
-                .parameters(),
-        )
-        .unwrap();
-
-        let video_decoder = video_context.decoder().video().unwrap();
-
-        let audio_context = ffmpeg::codec::context::Context::from_parameters(
-            input
-                .streams()
-                .best(ffmpeg_next::media::Type::Audio)
-                .unwrap()
-                .parameters(),
-        )
-        .unwrap();
-
-        let audio_decoder = audio_context.decoder().audio().unwrap();
-
         let audio_bytes_per_second = 44100 * 2 * 4;
         let audio_sample_size = 8192;
 
@@ -78,8 +48,8 @@ impl Demultiplexer {
         Self {
             raw_video_message_tx,
             raw_audio_message_tx,
-            video_decoder,
-            audio_decoder,
+            video_decoder: None,
+            audio_decoder: None,
             nal_length_size: 4,
             url,
             frame_interval_ms: None,
@@ -159,14 +129,8 @@ impl Demultiplexer {
 
         let mut mdat_reached = false;
 
-        /*
-         * After decoding, the frames are in YUP format
-         * We need to convert to RGB to match the specification of the Kitty graphics protocol
-         */
-        let mut converter = self
-            .video_decoder
-            .converter(ffmpeg_next::format::Pixel::RGB24)
-            .unwrap();
+        // Converter will be initialized after video decoder is created from moov data
+        let mut converter: Option<ffmpeg::software::scaling::Context> = None;
 
         let mut audio_timestamp_in_ms = 0;
         let mut video_timestamp_in_ms = 0;
@@ -241,6 +205,23 @@ impl Demultiplexer {
                                             self.nal_length_size = self.get_bit(avcc_data[4], 0)
                                                 + self.get_bit(avcc_data[4], 1) * 2
                                                 + 1;
+
+                                            // Initialize H.264 video decoder from avcC extradata
+                                            unsafe {
+                                                self.video_decoder = Some(
+                                                    codec_context::create_h264_decoder(avcc_data)
+                                                        .expect("Failed to create H264 decoder"),
+                                                );
+                                            }
+
+                                            // Initialize converter now that video decoder exists
+                                            converter = Some(
+                                                self.video_decoder
+                                                    .as_ref()
+                                                    .unwrap()
+                                                    .converter(ffmpeg_next::format::Pixel::RGB24)
+                                                    .unwrap(),
+                                            );
                                         }
 
                                         if let Streams::Video = trak.media.minf.header {
@@ -301,6 +282,14 @@ impl Demultiplexer {
                                         }
                                     }
 
+                                    // Initialize AAC audio decoder
+                                    unsafe {
+                                        self.audio_decoder = Some(
+                                            codec_context::create_aac_decoder()
+                                                .expect("Failed to create AAC decoder"),
+                                        );
+                                    }
+
                                     sample_map = Some(get_sample_map(moov_box.unwrap()).unwrap());
                                 }
                                 "mdat" => {
@@ -342,66 +331,71 @@ impl Demultiplexer {
                                 if !annexb_data.is_empty() {
                                     let packet = Packet::copy(&annexb_data);
 
-                                    match self.video_decoder.send_packet(&packet) {
-                                        Ok(_) => {
-                                            let mut yup_frame = frame::Video::empty();
-                                            let mut rgb_frame = frame::Video::empty();
-                                            while self
-                                                .video_decoder
-                                                .receive_frame(&mut yup_frame)
-                                                .is_ok()
-                                            {
-                                                let _ = converter.run(&yup_frame, &mut rgb_frame);
-                                                let data = rgb_frame.data(0);
+                                    if let Some(ref mut video_decoder) = self.video_decoder {
+                                        match video_decoder.send_packet(&packet) {
+                                            Ok(_) => {
+                                                let mut yup_frame = frame::Video::empty();
+                                                let mut rgb_frame = frame::Video::empty();
+                                                while video_decoder
+                                                    .receive_frame(&mut yup_frame)
+                                                    .is_ok()
+                                                {
+                                                    if let Some(ref mut conv) = converter {
+                                                        let _ = conv.run(&yup_frame, &mut rgb_frame);
+                                                    }
+                                                    let data = rgb_frame.data(0);
 
-                                                assert_eq!(data.len(), 640 * 360 * 3);
+                                                    assert_eq!(data.len(), 640 * 360 * 3);
 
-                                                self.raw_video_message_tx
-                                                    .send(RawVideoMessage::VideoMessage(
-                                                        BytesWithTimestamp {
-                                                            data: data.to_vec(),
-                                                            timestamp_in_ms: video_timestamp_in_ms,
-                                                        },
-                                                    ))
-                                                    .unwrap();
+                                                    self.raw_video_message_tx
+                                                        .send(RawVideoMessage::VideoMessage(
+                                                            BytesWithTimestamp {
+                                                                data: data.to_vec(),
+                                                                timestamp_in_ms: video_timestamp_in_ms,
+                                                            },
+                                                        ))
+                                                        .unwrap();
 
-                                                video_timestamp_in_ms +=
-                                                    self.frame_interval_ms.unwrap();
-                                                yup_frame = frame::Video::empty();
-                                                rgb_frame = frame::Video::empty();
+                                                    video_timestamp_in_ms +=
+                                                        self.frame_interval_ms.unwrap();
+                                                    yup_frame = frame::Video::empty();
+                                                    rgb_frame = frame::Video::empty();
+                                                }
                                             }
-                                        }
-                                        Err(e) => {
-                                            println!("Failed to send video packet: {:?}", e);
+                                            Err(e) => {
+                                                println!("Failed to send video packet: {:?}", e);
+                                            }
                                         }
                                     }
                                 }
                             } else {
                                 let packet = Packet::copy(&sample);
 
-                                match self.audio_decoder.send_packet(&packet) {
-                                    Ok(_) => {
-                                        let mut frame = frame::Audio::empty();
-                                        while self.audio_decoder.receive_frame(&mut frame).is_ok() {
-                                            let data = frame.data(0);
+                                if let Some(ref mut audio_decoder) = self.audio_decoder {
+                                    match audio_decoder.send_packet(&packet) {
+                                        Ok(_) => {
+                                            let mut frame = frame::Audio::empty();
+                                            while audio_decoder.receive_frame(&mut frame).is_ok() {
+                                                let data = frame.data(0);
 
-                                            assert_eq!(data.len(), 8192);
+                                                assert_eq!(data.len(), 8192);
 
-                                            self.raw_audio_message_tx
-                                                .send(RawAudioMessage::AudioMessage(
-                                                    BytesWithTimestamp {
-                                                        data: data.to_vec(),
-                                                        timestamp_in_ms: audio_timestamp_in_ms,
-                                                    },
-                                                ))
-                                                .unwrap();
+                                                self.raw_audio_message_tx
+                                                    .send(RawAudioMessage::AudioMessage(
+                                                        BytesWithTimestamp {
+                                                            data: data.to_vec(),
+                                                            timestamp_in_ms: audio_timestamp_in_ms,
+                                                        },
+                                                    ))
+                                                    .unwrap();
 
-                                            audio_timestamp_in_ms += self.sample_interval_ms;
-                                            frame = frame::Audio::empty();
+                                                audio_timestamp_in_ms += self.sample_interval_ms;
+                                                frame = frame::Audio::empty();
+                                            }
                                         }
-                                    }
-                                    Err(e) => {
-                                        println!("Failed to send audio packet: {:?}", e);
+                                        Err(e) => {
+                                            println!("Failed to send audio packet: {:?}", e);
+                                        }
                                     }
                                 }
                             }

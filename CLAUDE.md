@@ -41,6 +41,7 @@ yt-dlp process (spawned)
 
 - **src/demux/**: MP4 parsing and ffmpeg decoding (~75% of codebase)
   - `demultiplexer.rs`: Spawns yt-dlp, parses ftyp/moov/mdat boxes, decodes H264→RGB and AAC→PCM
+  - `codec_context.rs`: Unsafe FFI to construct ffmpeg decoders from avcC/codec parameters
   - `get_moov_box.rs`: Parses MP4 metadata structure (trak, mdia, stsd, avcC)
   - `get_sample_map.rs`: Builds ordered queue of audio/video sample locations
 
@@ -61,6 +62,6 @@ yt-dlp process (spawned)
 - Video uses format 18 from yt-dlp: H264 640x360 + AAC-LC audio
 - Alternate screen mode (`\x1B[?1049h`) for clean terminal experience
 
-### Known Issue
+### Codec Context Initialization
 
-`src/demux/demultiplexer.rs:49` has a hardcoded macOS path to a sample MP4 file used to initialize ffmpeg context. This needs a cross-platform solution.
+`src/demux/codec_context.rs` contains unsafe FFI functions that construct ffmpeg decoders directly from codec parameters extracted from the MP4 moov box. The H.264 video decoder is initialized with avcC extradata, and the AAC audio decoder with sample rate/channel configuration. This approach avoids needing external sample files.

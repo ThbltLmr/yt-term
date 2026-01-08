@@ -14,6 +14,7 @@ mod audio {
 }
 
 mod demux {
+    pub mod codec_context;
     pub mod demultiplexer;
     mod get_moov_box;
     mod get_sample_map;
