@@ -11,13 +11,5 @@ pub struct Args {
 }
 
 pub fn parse_args() -> Args {
-    let args = Args::parse();
-    
-    // Ensure exactly one of url or search is provided
-    if args.url.is_none() && args.search.is_none() {
-        eprintln!("Error: Either --url or --search must be provided");
-        std::process::exit(1);
-    }
-    
-    args
+    Args::parse()
 }
