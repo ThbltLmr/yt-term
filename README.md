@@ -4,7 +4,10 @@ Real time video streaming terminal player based on [yt-dlp](https://github.com/y
 **Disclaimer: This is a hobby project.** I wanted to learn more about Rust and video formats, and I did. It's not meant to be a legitimate alternative to an actual YouTube client or any other video streaming platform.
 
 ## Demo
-TBD
+
+https://github.com/user-attachments/assets/75d37a16-d643-4b30-ac42-3106a1646f82
+
+
 
 ## Dependencies
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) to extract data from video websites
