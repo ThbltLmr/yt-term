@@ -1,5 +1,7 @@
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -9,11 +11,19 @@ use super::encoder::EncodedVideoMessage;
 
 pub struct TerminalAdapter {
     producer_rx: Receiver<EncodedVideoMessage>,
+    cancel_flag: Option<Arc<AtomicBool>>,
 }
 
 impl TerminalAdapter {
     pub fn new(producer_rx: Receiver<EncodedVideoMessage>) -> Res<Self> {
-        Ok(TerminalAdapter { producer_rx })
+        Ok(TerminalAdapter {
+            producer_rx,
+            cancel_flag: None,
+        })
+    }
+
+    pub fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.cancel_flag = Some(flag);
     }
 
     fn process_element(&self, frame: BytesWithTimestamp) -> Res<()> {
@@ -35,6 +45,12 @@ impl TerminalAdapter {
         let mut started_playing = false;
 
         loop {
+            if let Some(ref flag) = self.cancel_flag {
+                if flag.load(Ordering::SeqCst) {
+                    return Ok(());
+                }
+            }
+
             match self.producer_rx.recv_timeout(Duration::from_millis(16)) {
                 Ok(message) => match message {
                     EncodedVideoMessage::EncodedVideoMessage(frame) => {

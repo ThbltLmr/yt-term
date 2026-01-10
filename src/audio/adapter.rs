@@ -2,8 +2,9 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleRate, StreamConfig};
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -13,6 +14,7 @@ use crate::helpers::types::{BytesWithTimestamp, Res};
 pub struct AudioAdapter {
     producer_rx: Receiver<RawAudioMessage>,
     audio_buffer: Arc<Mutex<VecDeque<f32>>>,
+    cancel_flag: Option<Arc<AtomicBool>>,
 }
 
 impl AudioAdapter {
@@ -22,7 +24,12 @@ impl AudioAdapter {
         Ok(AudioAdapter {
             producer_rx,
             audio_buffer,
+            cancel_flag: None,
         })
+    }
+
+    pub fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.cancel_flag = Some(flag);
     }
 
     fn process_element(&self, sample: BytesWithTimestamp) -> Res<()> {
@@ -66,6 +73,12 @@ impl AudioAdapter {
         let mut started_playing = false;
 
         loop {
+            if let Some(ref flag) = self.cancel_flag {
+                if flag.load(Ordering::SeqCst) {
+                    return Ok(());
+                }
+            }
+
             match self.producer_rx.recv_timeout(Duration::from_millis(16)) {
                 Ok(message) => match message {
                     RawAudioMessage::AudioMessage(sample) => {

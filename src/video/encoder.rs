@@ -2,6 +2,8 @@ use crate::demux::demultiplexer::RawVideoMessage;
 use crate::helpers::types::{BytesWithTimestamp, Res};
 use base64::{engine::general_purpose, Engine as _};
 use std::mem;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{collections::HashMap, sync::mpsc, time::Duration};
 
 pub enum EncodedVideoMessage {
@@ -16,12 +18,15 @@ pub struct Encoder {
     term_height: u16,
     producer_rx: mpsc::Receiver<RawVideoMessage>,
     producer_tx: mpsc::Sender<EncodedVideoMessage>,
+    force_y_offset: Option<usize>,
+    cancel_flag: Option<Arc<AtomicBool>>,
 }
 
 impl Encoder {
     pub fn new(
         producer_rx: mpsc::Receiver<RawVideoMessage>,
         producer_tx: mpsc::Sender<EncodedVideoMessage>,
+        force_y_offset: Option<usize>,
     ) -> Res<Self> {
         let (term_width, term_height) = Self::get_terminal_size().unwrap_or((1280, 720));
 
@@ -36,7 +41,13 @@ impl Encoder {
             term_height,
             producer_rx,
             producer_tx,
+            force_y_offset,
+            cancel_flag: None,
         })
+    }
+
+    pub fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.cancel_flag = Some(flag);
     }
 
     // Convert a frame to the Kitty Graphics Protocol format
@@ -66,7 +77,9 @@ impl Encoder {
 
     pub fn encode(&mut self) -> Res<()> {
         let x_offset = (self.term_width as usize - self.width) / 2;
-        let y_offset = (self.term_height as usize - self.height) / 2;
+        let y_offset = self.force_y_offset.unwrap_or_else(|| {
+            (self.term_height as usize - self.height) / 2
+        });
 
         let encoded_control_data = self.encode_control_data(HashMap::from([
             ("f".into(), "24".into()),
@@ -79,6 +92,13 @@ impl Encoder {
         ]));
 
         loop {
+            if let Some(ref flag) = self.cancel_flag {
+                if flag.load(Ordering::SeqCst) {
+                    self.producer_tx.send(EncodedVideoMessage::Done).ok();
+                    return Ok(());
+                }
+            }
+
             match self.producer_rx.recv_timeout(Duration::from_millis(16)) {
                 Ok(message) => match message {
                     RawVideoMessage::VideoMessage(frame) => {
@@ -136,7 +156,7 @@ mod tests {
         let (_streaming_done_tx, producer_rx) = mpsc::channel();
         let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(producer_rx, producer_tx).unwrap();
+        let encoder = Encoder::new(producer_rx, producer_tx, None).unwrap();
 
         assert_eq!(encoder.width, 640);
         assert_eq!(encoder.height, 360);
@@ -144,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_encode_control_data() {
-        let encoder = Encoder::new(mpsc::channel().1, mpsc::channel().0).unwrap();
+        let encoder = Encoder::new(mpsc::channel().1, mpsc::channel().0, None).unwrap();
 
         let control_data = HashMap::from([
             ("f".into(), "24".into()),
@@ -170,7 +190,7 @@ mod tests {
         let (_streaming_done_tx, producer_rx) = mpsc::channel();
         let (producer_tx, _encoding_done_rx) = mpsc::channel();
 
-        let encoder = Encoder::new(producer_rx, producer_tx).unwrap();
+        let encoder = Encoder::new(producer_rx, producer_tx, None).unwrap();
 
         assert!(
             encoder.term_width > 0 && encoder.term_height > 0,

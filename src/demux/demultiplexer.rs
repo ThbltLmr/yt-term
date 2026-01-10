@@ -1,7 +1,9 @@
 use ffmpeg_next::{self as ffmpeg, frame, Packet};
 use std::io::Read;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::usize;
 
 use crate::demux::codec_context;
@@ -31,6 +33,7 @@ pub struct Demultiplexer {
     pub nal_length_size: u8,
     frame_interval_ms: Option<usize>,
     sample_interval_ms: usize,
+    cancel_flag: Option<Arc<AtomicBool>>,
 }
 
 impl Demultiplexer {
@@ -54,7 +57,19 @@ impl Demultiplexer {
             url,
             frame_interval_ms: None,
             sample_interval_ms,
+            cancel_flag: None,
         }
+    }
+
+    pub fn set_cancel_flag(&mut self, flag: Arc<AtomicBool>) {
+        self.cancel_flag = Some(flag);
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel_flag
+            .as_ref()
+            .map(|f| f.load(Ordering::SeqCst))
+            .unwrap_or(false)
     }
 
     /*
@@ -136,6 +151,13 @@ impl Demultiplexer {
         let mut video_timestamp_in_ms = 0;
 
         loop {
+            if self.is_cancelled() {
+                let _ = yt_dlp_process.kill();
+                self.raw_video_message_tx.send(RawVideoMessage::Done).ok();
+                self.raw_audio_message_tx.send(RawAudioMessage::Done).ok();
+                return Ok(());
+            }
+
             match yt_dlp_stdout.read(&mut buffer) {
                 Ok(0) => {
                     break;

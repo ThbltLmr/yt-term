@@ -8,15 +8,12 @@ use ratatui::{
 use crate::tui::app::{App, AppMode};
 use crate::tui::search::SearchResult;
 
-const VIDEO_ROWS: u16 = 20;
+const VIDEO_ROWS: u16 = 25;
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(VIDEO_ROWS),
-            Constraint::Min(5),
-        ])
+        .constraints([Constraint::Length(VIDEO_ROWS), Constraint::Min(5)])
         .split(f.area());
 
     render_video_area(f, app, chunks[0]);
@@ -25,8 +22,7 @@ pub fn render(f: &mut Frame, app: &App) {
 
 fn render_video_area(f: &mut Frame, app: &App, area: Rect) {
     let block = if matches!(app.mode, AppMode::Playing) {
-        Block::default()
-            .borders(Borders::NONE)
+        Block::default().borders(Borders::NONE)
     } else {
         Block::default()
             .borders(Borders::ALL)
@@ -39,10 +35,7 @@ fn render_video_area(f: &mut Frame, app: &App, area: Rect) {
 fn render_bottom_area(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(1),
-        ])
+        .constraints([Constraint::Length(3), Constraint::Min(1)])
         .split(area);
 
     render_search_bar(f, app, chunks[0]);
@@ -56,13 +49,12 @@ fn render_search_bar(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let search_input = Paragraph::new(app.search_input.as_str())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(style)
-                .title("Search"),
-        );
+    let search_input = Paragraph::new(app.search_input.as_str()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(style)
+            .title("Search"),
+    );
     f.render_widget(search_input, area);
 
     if matches!(app.mode, AppMode::Search) {
