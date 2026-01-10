@@ -1,37 +1,47 @@
-# yt-term
+# Streaming YouTube in the terminal because I can
 Real time video streaming terminal player based on [yt-dlp](https://github.com/yt-dlp/yt-dlp), [ffmpeg](https://www.ffmpeg.org), and the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/).
 
-## Disclaimer
-This is a hobby project, meant to try out the Kitty graphics protocol. This is not meant to be an actual YouTube client. In fact, it will probably not even for work some videos that have non-supported formats.
+**Disclaimer: This is a hobby project.** I wanted to learn more about Rust and video formats, and I did. It's not meant to be a legitimate alternative to an actual YouTube client or any other video streaming platform.
+
+## Demo
+TBD
 
 ## Dependencies
-This program requires:
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) to extract data from video websites
+- [ffmpeg](https://www.ffmpeg.org/) for video and audio decoding
 - a terminal that supports the Kitty graphics protocol, e.g. [Kitty](https://sw.kovidgoyal.net/kitty/), [Ghostty](https://ghostty.org/)
 
 ## Usage
 
-### Cloning the repository and building with Cargo
+1. Clone the repository
+2. Run or build with `cargo`
+
+Run without arguments to start the TUI. Alternatively, you can pass the `-u` or `--url` option to play a specific video, or `-s` or `--search` to search YouTube and play the first result.
+
 ```bash
 git clone git@github.com:ThbltLmr/yt-term.git  # or use HTTPS or the GitHub CLI
 cd yt-term
-cargo build --release
+cargo build --release # or cargo run
 ```
 
-### Downloading the pre-built binary
-You can download the pre-built binary from the [releases page](https://github.com/ThbltLmr/yt-term/releases).
+## FAQ
 
-### Running the program
-You can run the program with the following command:
-```bash 
+### 1. Is this an actual useful program?
 
-./target/release/yt-term [options] # if using Cargo
-./yt-term [options] # if using the pre-built binary
-```
+No.
 
-### Options
-| Option | Description |
-|--------|-------------|
-| `-u`, `--url` | The URL of the video to play |
-| `-s`, `--search` | A search query; the tool will play the first result for that query on YouTube |
+### 2. Should I use this?
 
+Probably not.
+
+### 3. Does it technically work?
+
+Yes, kind of.
+
+### 4. Why does it not work for this video / my terminal / my OS / etc?
+
+This is a Rust terminal program built by a TypeScript web developer, what did you expect?
+
+### 5. I read the source code and now my eyes are bleeding
+
+First, that is not a question. Also, see question 4.
