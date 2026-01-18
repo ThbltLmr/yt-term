@@ -129,7 +129,7 @@ fn handle_results_mode(app: &mut App, key: KeyCode, playback: &mut Option<Playba
                 app.mode = AppMode::Playing;
 
                 // Start playback asynchronously
-                *playback = Some(crate::start_playback_async(&result.url, false));
+                *playback = Some(crate::start_playback_async(&result.url, false, None));
             }
         }
         _ => {}

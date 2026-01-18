@@ -102,7 +102,7 @@ fn run_direct_playback(input: &str, use_screen_guard: bool, center_video: bool) 
     });
 
     let mut encoder =
-        Encoder::new(demultiplexer_video_rx, video_encoding_tx, y_offset).expect("Failed to create encoder");
+        Encoder::new(demultiplexer_video_rx, video_encoding_tx, y_offset, None).expect("Failed to create encoder");
 
     let encode_handle = thread::spawn(move || {
         encoder.encode().expect("Failed to start encoding");
@@ -128,7 +128,7 @@ fn run_direct_playback(input: &str, use_screen_guard: bool, center_video: bool) 
     let _ = video_handle.join();
 }
 
-pub fn start_playback_async(input: &str, center_video: bool) -> PlaybackHandle {
+pub fn start_playback_async(input: &str, center_video: bool, video_rows: Option<u16>) -> PlaybackHandle {
     let cancel_flag = Arc::new(AtomicBool::new(false));
 
     let (demultiplexer_audio_tx, demultiplexer_audio_rx) = channel::<RawAudioMessage>();
@@ -147,7 +147,7 @@ pub fn start_playback_async(input: &str, center_video: bool) -> PlaybackHandle {
 
     let cancel = cancel_flag.clone();
     let encode_handle = thread::spawn(move || {
-        let mut encoder = Encoder::new(demultiplexer_video_rx, video_encoding_tx, y_offset)
+        let mut encoder = Encoder::new(demultiplexer_video_rx, video_encoding_tx, y_offset, video_rows)
             .expect("Failed to create encoder");
         encoder.set_cancel_flag(cancel);
         let _ = encoder.encode();
