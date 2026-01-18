@@ -8,7 +8,7 @@ use ratatui::{
 use crate::tui::app::{App, AppMode};
 use crate::tui::search::SearchResult;
 
-const VIDEO_ROWS: u16 = 25;
+pub const VIDEO_ROWS: u16 = 25;
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()

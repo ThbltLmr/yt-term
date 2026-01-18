@@ -128,8 +128,8 @@ fn handle_results_mode(app: &mut App, key: KeyCode, playback: &mut Option<Playba
                 app.playing_url = Some(result.url.clone());
                 app.mode = AppMode::Playing;
 
-                // Start playback asynchronously
-                *playback = Some(crate::start_playback_async(&result.url, false, None));
+                // Start playback asynchronously with video area constraints
+                *playback = Some(crate::start_playback_async(&result.url, false, Some(ui::VIDEO_ROWS)));
             }
         }
         _ => {}
