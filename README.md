@@ -5,7 +5,8 @@ Real time video streaming terminal player based on [yt-dlp](https://github.com/y
 
 ## Demo
 
-https://github.com/user-attachments/assets/47e1716c-fb1d-4092-a5cd-cfaa40a70b63
+https://github.com/user-attachments/assets/f102be1d-9e0f-42da-bdc8-012b09d3045f
+
 
 
 
